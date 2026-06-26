@@ -6,8 +6,9 @@ Three-tier evaluation aligned with writing-guide.md's anti-AI checklist:
 
   Tier 1 (Statistical, 50%): 6 checks measuring statistical properties
          that AI detectors analyze (burstiness, distribution, variance).
-  Tier 2 (Pattern, 30%):     5 checks for specific linguistic patterns
-         (banned words, broken sentences, real sources).
+  Tier 2 (Pattern, 30%):     7 checks for specific linguistic patterns
+         (banned words, broken sentences, real sources, translation-ese,
+         repeated sentence patterns).
   Tier 3 (LLM, 20%):        Semantic analysis done by the agent in SKILL.md
          (style drift, density waves, coherence). Passed via --tier3 flag.
 
@@ -43,6 +44,16 @@ BANNED_WORDS = [
     "意义深远", "影响深远", "引发了广泛关注", "引起了热烈讨论",
     "总的来说", "综合来看", "由此可见", "不难发现", "通过以上分析",
     "正如我们所看到的",
+    # 自标深度 [规则 3.5]
+    "再深入一层", "更深地说", "进一步探讨", "让我们深入挖掘", "更深层地看",
+    "从更深的维度", "深入剖析", "深挖一层", "往下挖", "更进一步说", "往深处想",
+    "这就是最本质的问题", "这才是底层逻辑", "这个洞察的核心在于",
+    # 宣传腔
+    "标志着", "见证了", "充满活力", "蓬勃发展", "蒸蒸日上", "应运而生",
+    "如火如荼", "方兴未艾", "日新月异", "与时俱进",
+    # 机械冗长
+    "进行讨论", "进行总结", "做出贡献", "产生影响", "实现功能",
+    "开展研究", "发挥作用", "做出改变",
 ]
 
 REAL_SOURCE_PATTERNS = [
@@ -115,6 +126,40 @@ BROKEN_SENTENCE_PATTERNS = [
     r'\.{3,}|…',
     r'不对[，,]',
     r'算了',
+]
+
+# Translation-ese patterns [规则 2.5]
+# These are syntactic structures common in English-to-Chinese machine
+# translation / AI generation but rare in native Chinese writing.
+TRANSLATION_TONE_PATTERNS = [
+    r'被[^，。！？]{2,}(?:认为是|视为|定义为|称为)',  # 被动语态滥用
+    r'(?:可以|能够)被[^，。！？]{2,}(?:发现|看到|观察到|理解为)',
+    r'(?:一个|一种)(?:由|基于|通过)[^，。]{4,}(?:的)(?:产品|技术|服务|方案|平台)',  # 长定语从句嵌套
+    r'(?:使得|导致|促使)[^，。]{3,}(?:得以|能够)',  # "使得...得以/能够" 翻译腔
+    r'在[^，。]{2,}(?:方面|层面|维度)上',  # "在...方面上" 直译
+    r'对于[^，。]{2,}而言',  # "对于...而言" 直译
+    r'作为[^，。]{2,}(?:的)(?:一种|一个)(?:方式|方式|方法|工具|手段)',
+    r'(?:从[^，。]{2,}的视角|从[^，。]{2,}的维度)(?:来看|来看)',
+    r'(?:换句话说|换言之)',  # 虽然偶尔可以，但高频出现是翻译腔
+    r'(?:不仅[^，。]{2,}) 也(?:还)[^，。]{2,}(?:而且|并且|此外)',  # not only...but also 直译
+]
+
+# High-risk repeated sentence patterns [规则 2.6]
+# These structures are favored by AI; each should appear at most once.
+SENTENCE_PATTERN_TEMPLATES = [
+    (r'不是[^，。]{1,8}，?而是[^。！？]{1,20}', "不是A而是B"),
+    (r'并非[^，。]{1,8}，?而是[^。！？]{1,20}', "并非A而是B"),
+    (r'与其说[^，。]{1,8}，?不如说[^。！？]{1,20}', "与其说A不如说B"),
+    (r'与其[^，。]{1,8}，?不如[^。！？]{1,20}', "与其A不如B"),
+    (r'换句话说', "换句话说"),
+    (r'换言之', "换言之"),
+    (r'问题不在于[^，。]{1,8}，?而在于[^。！？]{1,20}', "不在于A而在于B"),
+    (r'不是[^，。]{1,8}的问题，?是[^。！？]{1,20}的问题', "不是A问题是B问题"),
+    (r'哪怕[^，。]{1,8}，?也[^。！？]{1,20}', "哪怕A也B"),
+    (r'就连[^，。]{1,8}都[^。！？]{1,20}', "就连A都B"),
+    (r'(?:A是对的，?但|A是对的，?但)[^。！？]{1,15}(?:更|更)对', "A对但B更对"),
+    (r'说到底[^，。]{0,4}是[^。！？]{1,15}', "说到底是"),
+    (r'归根结底[^，。]{0,4}是[^。！？]{1,15}', "归根结底是"),
 ]
 
 
@@ -306,6 +351,67 @@ def score_self_correction(text):
     return _make_result(score, f"{count} self-corrections/insertions (target ≥3)", "self_correction_rate")
 
 
+def score_translation_tone(text):
+    """[2.5] Translation-ese pattern detection. → translation_roundtrip_test
+
+    Counts syntactic structures that are common in machine translation / AI
+    generation but rare in native Chinese writing. More matches = more AI-like.
+    Score is INVERTED: 0 hits = 1.0 (good), many hits = 0.0 (bad).
+    """
+    count = 0
+    hit_patterns = []
+    for pattern in TRANSLATION_TONE_PATTERNS:
+        matches = re.findall(pattern, text)
+        if matches:
+            count += len(matches)
+            hit_patterns.append(f"{pattern}×{len(matches)}")
+
+    # Score: 0 hits = perfect (1.0), 1-2 = moderate, 3+ = poor
+    if count == 0:
+        score = 1.0
+    elif count <= 2:
+        score = 0.7
+    elif count <= 4:
+        score = 0.4
+    else:
+        score = 0.1
+
+    detail = f"{count} translation-ese patterns (target 0)"
+    if hit_patterns:
+        detail += f": {'; '.join(hit_patterns[:3])}"
+    return _make_result(score, detail, "translation_roundtrip_test")
+
+
+def score_sentence_pattern_repeat(text):
+    """[2.6] Repeated sentence pattern detection. → pattern_repeat_max
+
+    Checks if any high-risk sentence pattern appears more than once.
+    Score is INVERTED: 0 repeats = 1.0 (good), more repeats = lower score.
+    """
+    repeats = 0
+    repeat_details = []
+    for pattern, label in SENTENCE_PATTERN_TEMPLATES:
+        matches = re.findall(pattern, text)
+        if len(matches) > 1:
+            repeats += len(matches) - 1  # first use is OK, extras are repeats
+            repeat_details.append(f"{label}×{len(matches)}")
+
+    # Score: 0 repeats = perfect, each repeat reduces score
+    if repeats == 0:
+        score = 1.0
+    elif repeats == 1:
+        score = 0.5
+    elif repeats == 2:
+        score = 0.3
+    else:
+        score = 0.1
+
+    detail = f"{repeats} repeated patterns (target 0)"
+    if repeat_details:
+        detail += f": {'; '.join(repeat_details[:3])}"
+    return _make_result(score, detail, "pattern_repeat_max")
+
+
 # ============================================================
 # Tier Runners
 # ============================================================
@@ -325,6 +431,8 @@ TIER2_CHECKS = [
     ("real_sources", score_real_sources),
     ("word_temperature_mix", score_word_temperature_mix),
     ("self_correction", score_self_correction),
+    ("translation_tone", score_translation_tone),
+    ("sentence_pattern_repeat", score_sentence_pattern_repeat),
 ]
 
 
