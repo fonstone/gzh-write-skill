@@ -328,6 +328,7 @@ Category 映射规则：
 ```
 读取: {skill_dir}/references/article-archetypes.md
 读取: {skill_dir}/references/style-examples.md
+读取: {skill_dir}/references/tech-narrative-architecture.md（技术叙事驱动法——将散点知识转化为"背景→问题→演进→方案"叙事线，配合 tech-frameworks.md 使用，决定了整篇文章的叙事弧线）
 读取: {skill_dir}/references/ai-patterns.md（AI 刻板模式三层扫描 + 自然度评分体系，写完初稿后做风格自检）
 读取: {skill_dir}/references/ai-patterns-examples.md（AI 模式反面示例 + 正向改写对照，用于改稿阶段参考）
 if mode == tech:
@@ -384,6 +385,8 @@ if mode == tech:
 13. **意外检验**：写这篇时发现了什么自己之前没想到的？它够显眼吗？如果没有意外发现→回去切得更狠
 
 LLM 自行完成，不需要调用脚本。
+
+**叙事骨架检查**（tech 模式）：按 tech-narrative-architecture.md 四项检查：背景有张力（具体年代/硬件/场景）、问题场景化且有取舍、演进有轨迹（试错+突破+外部驱动力）、方案解释了取舍和开放问题。
 
 **AI 模式扫描**（wechat + tech 均适用）：
 ```
