@@ -318,6 +318,7 @@ Category 映射规则：
 读取: {baseDir}/references/article-archetypes.md
 读取: {baseDir}/references/style-examples.md
 读取: {baseDir}/references/tech-narrative-architecture.md（技术叙事驱动法——将散点知识转化为"背景→问题→演进→方案"叙事线，配合 tech-frameworks.md 使用，决定了整篇文章的叙事弧线）
+读取: {baseDir}/references/tech-writing-persuasion.md（技术写作说服力——Cialdini七原则+RISE段落节奏+注意力引导系统，与叙事架构配合：叙事线决定讲什么，说服力决定为什么继续读）
 读取: {baseDir}/references/ai-patterns.md（AI 刻板模式三层扫描 + 自然度评分体系，写完初稿后做风格自检）
 读取: {baseDir}/references/ai-patterns-examples.md（AI 模式反面示例 + 正向改写对照，用于改稿阶段参考）
 if mode == tech:
