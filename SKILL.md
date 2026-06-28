@@ -194,7 +194,9 @@ python3 {skill_dir}/scripts/seo_keywords.py --json {关键词}
 
 7 套框架（痛点/故事/清单/对比/热点解读/纯观点/复盘），自动选推荐指数最高的。
 
-如果 mode=tech，额外加载 `{skill_dir}/references/tech-frameworks.md`，合并到框架选择列表中（新增 4 套：原理演进/技术对比/实践指南/源码拆解）。
+如果 mode=tech，额外加载 `{skill_dir}/references/tech-frameworks.md`，合并到框架选择列表中（新增 5 套：原理演进/技术对比/实践指南/源码拆解/全景架构型）。全景架构型用于多层技术全景主题（如 AI Infra 全栈），叙事逻辑为"定位→扫描→锁定→深挖→验证"。
+
+选定框架后，**记住框架名称**（如"全景架构型"），后续 Step 4.5 和 Step 5 调用 `l1_hard_rules.py` 时需追加 `--framework <所选框架>` 以激活框架级代码块数量下限和 P0 四象限覆盖检查。
 
 **3.2 素材采集 + 内容增强**（合并执行，共用搜索结果）：
 
@@ -391,8 +393,9 @@ if mode == tech:
 **第一层：脚本自动扫描**（先执行，命中即定向修复）：
 
 ```bash
-python3 {skill_dir}/scripts/l1_hard_rules.py {article_path} --json --mode {mode}
+python3 {skill_dir}/scripts/l1_hard_rules.py {article_path} --json --mode {mode} {tech_framework_flag}
 ```
+- tech 模式自动追加 `--framework {tech_framework}`，激活代码块数量下限和 P0 四象限覆盖检查
 
 输出包含以下可量化指标——这些指标**不再由 LLM 自行判断**，而是以脚本输出为准：
 
@@ -404,6 +407,8 @@ python3 {skill_dir}/scripts/l1_hard_rules.py {article_path} --json --mode {mode}
 | 翻译腔密度 | 从句嵌套/主语充分化/被动语态密集段落 | 翻译腔特征段落数 = 0 | 从句拆开，主语该省则省 |
 | 缩写管理 | 所有专业缩写首次出现有全称 | L1 `acronym_first_use` 命中 = 0 | 自动插入全称 |
 | 数字单位 | 所有技术指标数字带单位 | L1 `unit_missing` 命中 = 0 | 补充单位 |
+| 代码块数量（tech） | — | 满足 `--framework` 对应框架的下限要求（源码拆解型≥2/实践指南型≥3/技术对比型≥1/全景架构型≥3） | 在瓶颈层和案例闭环处补充代码/配置/命令块 |
+| P0 四象限覆盖（tech） | — | 每个 P0 知识点覆盖"是什么/为什么/何时用/怎么用"四个象限 | 在缺失象限处补充对应维度 |
 
 脚本输出中 `summary.passed = true` 时跳过整个第一层。不通过 → 逐项定向修复（每轮最多改 3 处），改完重新跑脚本。最多 2 轮。
 
@@ -479,10 +484,10 @@ if mode == tech:
 
 **L1 硬性规则自动扫描**（脚本化，必须 0 容忍）：
 ```bash
-python3 {skill_dir}/scripts/l1_hard_rules.py {article_path} --json --mode {mode}
+python3 {skill_dir}/scripts/l1_hard_rules.py {article_path} --json --mode {mode} {tech_framework_flag}
 ```
 - wechat 模式：覆盖 L1-1~L1-6：禁用词/禁用标点/结构套话/空泛工具名/假设性例子/AI 角色边界
-- tech 模式：覆盖 L1-1~L1-6：技术编造扫描/API验证/类比局限性/代码可运行/缩写管理/数字单位
+- tech 模式：覆盖 L1-1~L1-6：技术编造扫描/API验证/类比局限性/代码可运行/缩写管理/数字单位 + 框架级代码块数量下限 + P0 四象限覆盖检查（需设置 `{tech_framework_flag}` 为 `--framework <所选框架>`）
 - 命中即逐个定向替换，不留到人工
 
 **L2 风格一致性模式匹配**（半自动）：
