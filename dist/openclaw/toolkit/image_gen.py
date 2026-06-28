@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-AI image generation module for WeWrite.
+AI image generation module for GzhWrite.
 
 Supports multiple providers via a simple abstraction:
   - doubao-seedream (Volcengine Ark) — default, good for Chinese prompts
@@ -44,7 +44,7 @@ CONFIG_PATHS = [
     Path.cwd() / "config.yaml",
     Path(__file__).parent.parent / "config.yaml",  # skill root
     Path(__file__).parent / "config.yaml",          # toolkit dir
-    Path.home() / ".config" / "wewrite" / "config.yaml",
+    Path.home() / ".config" / "gzh-write" / "config.yaml",
 ]
 
 

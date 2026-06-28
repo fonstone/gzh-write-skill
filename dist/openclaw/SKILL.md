@@ -1,9 +1,9 @@
 ---
-name: wewrite
+name: gzh-write
 description: Use when working with 微信公众号/WeChat official accounts — writing articles, topic selection, formatting, publishing drafts, SEO, cover images, learning editing style, article analytics, or :::dialogue/:::timeline/:::callout container syntax. Triggers on 公众号/推文/微信文章/草稿箱/微信排版/选题/热搜/热点抓取/封面图/配图/排版主题. NOT for generic writing, blog, email, PPT, or short-video content — requires WeChat/公众号 context.
 ---
 
-# WeWrite — 公众号文章全流程
+# GzhWrite — 公众号文章全流程
 
 ## 行为声明
 
@@ -23,7 +23,7 @@ description: Use when working with 微信公众号/WeChat official accounts — 
 - **BLOCKED** — 关键步骤无法继续（如 Python 依赖缺失且用户拒绝安装）
 - **NEEDS_CONTEXT** — 需要用户提供信息才能继续（如首次设置需要公众号名称）
 
-**路径约定**：本文档中 `{baseDir}` 指本 SKILL.md 所在的目录（即 WeWrite 的根目录）。
+**路径约定**：本文档中 `{baseDir}` 指本 SKILL.md 所在的目录（即 GzhWrite 的根目录）。
 
 **Onboard 例外**：Onboard 是交互式的（需要问用户问题），不受"全自动"约束。Onboard 完成后回到全自动管道。
 
@@ -45,7 +45,7 @@ description: Use when working with 微信公众号/WeChat official accounts — 
      - 内容增强策略（角度发现/密度强化/细节锚定/真实体感）
      - 范文风格库是否命中（用了哪几篇 exemplar，还是 fallback 到种子）
      - playbook 中生效的规则条数
-  2. 如果 history.yaml 无记录或用户指定了外部文章 → 跳过此部分，提示"这篇文章不是 WeWrite 生成的，只做质量检查"
+  2. 如果 history.yaml 无记录或用户指定了外部文章 → 跳过此部分，提示"这篇文章不是 GzhWrite 生成的，只做质量检查"
 
   **第二部分：质量检查**（告诉用户哪里还能改）
   1. `python3 {baseDir}/scripts/humanness_score.py {article_path} --json`
@@ -60,7 +60,7 @@ description: Use when working with 微信公众号/WeChat official accounts — 
   4. 如果所有项得分都不错 → "这篇文章质量不错，建议在编辑锚点处加入你的个人内容就可以发了。"
 
   **输出格式**：自然语言报告，不输出 JSON 或分数（用户不需要看数字）
-- 用户说"更新"/"更新 WeWrite"/"升级" → 在 `{baseDir}` 执行 `git pull origin main`，完成后告知版本变化
+- 用户说"更新"/"更新 GzhWrite"/"升级" → 在 `{baseDir}` 执行 `git pull origin main`，完成后告知版本变化
 
 ---
 
@@ -105,7 +105,7 @@ cd {baseDir} && git fetch origin main --quiet 2>/dev/null
 
 比对本地 `{baseDir}/VERSION` 与远程 `git show origin/main:VERSION`：
 - 相同 → 静默通过
-- 不同 → 提示用户："WeWrite 有新版本可用（当前 X → 最新 Y），说「更新」即可升级。"**不阻断流程**，继续 1.3
+- 不同 → 提示用户："GzhWrite 有新版本可用（当前 X → 最新 Y），说「更新」即可升级。"**不阻断流程**，继续 1.3
 - git 不可用（无 .git 目录或 fetch 失败）→ 静默跳过
 
 **1.3 加载风格**：
@@ -204,6 +204,7 @@ python3 {baseDir}/scripts/seo_keywords.py --json {关键词}
 
 ```
 读取: {baseDir}/references/writing-guide.md
+读取: {baseDir}/references/content-enhance.md（含四个共性高分动作：人话转译/横向对比/技术商业双视角/信息密度节奏）
 读取: {baseDir}/playbook.md（如果存在，按 confidence 分级执行）
 读取: {baseDir}/history.yaml（最近 3 篇的 dimensions + closing_type 字段）
 读取: {baseDir}/references/exemplars/index.yaml（如果存在）
@@ -283,8 +284,14 @@ Category 映射规则：
 建库命令：`python3 {baseDir}/scripts/extract_exemplar.py article.md`
 
 **4.4 写文章**：
-- H1 标题（20-28 字） + H2 结构，1500-2500 字
+- H1 标题（20-28 字） + H2 结构，2000-3000 字
+- **五段式骨架**（见 frameworks.md 通用五段式骨架）：段一场景钩子 ≈200 字 / 段二背景机制拆解 ≈500-700 字 / 段三核心干货 ≈900-1300 字 / 段四延伸冲突 ≈300-400 字 / 段五金句+CTA ≈100 字。字数是引导不是死线，但功能段（钩子/干货/延伸/收尾）不能省
+- **开头钩子**：段一使用 writing-guide.md 开头钩子技法三法之一（故事场景/问题戳焦虑/数据现象），用行为标签锁定人群
+- **派别分支**：段二段四按派别分支执行——技术派补人话版路径 + 论文 vs 现实 gap；产业派补商业/政策语境 + 对具体角色的影响
+- **段三变体**：按文章类型选——测评类→横向对比表+实测结论；趋势类→3 点配案例/数据；实操类→1. 2. 3. 步骤+模板
 - **素材 + 增强约束**：Step 3.2 的素材和增强材料分散嵌入各 H2 段落。增强策略的核心输出（角度/密度要点/细节/用户声音）必须贯穿全文，不只装饰性出现一次
+- **四个共性高分动作**（见 content-enhance.md）：人话转译、横向对比、技术商业双视角、信息密度节奏——适用的动作必须执行
+- **排版纪律**：重点加粗≤全文 5%；每 200-300 字一个 H2；复杂信息用表/标号；配图锚点 ≥3 张（架构图/对比表/实测截图）；超 3500 字分 Part 加目录锚点
 - **写作人格**：按 4.2 加载的人格参数写作（数据呈现方式、个人声音浓度、不确定性表达等）
 - **收尾方式**：persona 的 `closing_tendency` 仅作为倾向参考。根据文章内容和情绪弧线自行判断最自然的收尾方式。如果 history.yaml 中最近 3 篇有 `closing_type` 字段，避免使用相同的收尾类型
 - **写作规范**：writing-guide.md 中的基础规则（禁用词、句长方差、词汇混用、翻译腔免疫、句式不重复、不自标深度、最高法则等）在初稿阶段生效。磨阶段的反风格 checklist、口语检验、意外检验、中文重写在 4.5 快速自检中执行
@@ -304,7 +311,7 @@ Category 映射规则：
 4. **翻译腔扫描**：抽查长句，主语充分化/从句嵌套/被动语态密集的段落重写——从句拆开，主语该省则省
 
 **内容层面**：
-5. **开头钩子**：前 3 句是否制造了悬念/冲突/好奇心？如果是平铺直叙的背景介绍，重写开头
+5. **开头钩子**：前 3 句是否用了 writing-guide.md 开头钩子技法三法之一（故事场景/问题戳焦虑/数据现象）？如果是平铺直叙的背景介绍，按对应勾法重写开头
 6. **增强贯穿**：增强策略的核心输出是否只出现在一段？如果是，在其他 H2 中补充
 7. **金句检查**：全文是否有至少 1 句可独立截图转发的句子？如果没有，在情绪高点处补一句
 
@@ -323,7 +330,7 @@ LLM 自行完成，不需要调用脚本。
 读取: {baseDir}/references/seo-rules.md
 ```
 
-**5.1 SEO**：3 个备选标题 + 摘要（≤40 字）+ 5 标签 + 关键词密度优化
+**5.1 SEO**：3 个备选标题（标注钩子类型：时效数据/精准人群/学术权威）+ 摘要（≤40 字）+ 5 标签 + 关键词密度优化
 
 **5.2 质量验证**（两个维度，每项逐一检查）：
 
@@ -347,8 +354,13 @@ LLM 自行完成，不需要调用脚本。
 | 检查项 | 标准 | 适用框架 |
 |--------|------|---------|
 | 增强贯穿 | 增强策略的核心输出（角度/密度/细节/体感）在全文可见，不只出现在一段 | 所有 |
-| 开头钩子 | 前 3 句能制造悬念、冲突或好奇心（不是背景铺垫） | 所有 |
+| 开头钩子 | 前 3 句用了三法之一（故事场景/问题戳焦虑/数据现象），非背景铺垫 | 所有 |
 | 金句密度 | 至少 1 处可独立截图转发的句子 | 所有 |
+| CTA 三要素 | 结尾 CTA 同时命中紧迫感+低门槛+价值可视化（见 seo-rules.md） | 所有 |
+| 人话转译 | 技术概念有日常类比转译，非入门读者也能懂 | 热点解读/纯观点 |
+| 横向对比 | 同标准实测+踩坑必报+明确建议 | 对比/清单 |
+| 技术商业双视角 | 至少 1 处"技术→对钱意味着什么"的判断 | 热点解读/纯观点 |
+| 密度节奏 | 每 200-300 字有 H2，重点加粗，段落不超 3 行 | 所有 |
 | 操作密度 | 每个 H2 有可操作要点（工具/步骤/参数） | 痛点/清单 |
 | 角度锐度 | 核心观点能引发同意或反对，不是"两面都有道理" | 热点解读/纯观点 |
 | 场景感 | 至少 2 处有时间/地点/对话等画面细节 | 故事/复盘 |
@@ -464,7 +476,7 @@ python3 {baseDir}/toolkit/cli.py preview {markdown} --theme {theme} --no-open -o
 **8.2 回复用户**：
 
 - 最终标题 + 2 备选 + 摘要 + 5 标签 + media_id
-- 编辑建议："文章有 2-3 个编辑锚点，建议加入你自己的话。你可以在本地 markdown 里改，也可以直接在微信草稿箱改——改完后说**'学习我的修改'**，WeWrite 都能学到你的风格。"
+- 编辑建议："文章有 2-3 个编辑锚点，建议加入你自己的话。你可以在本地 markdown 里改，也可以直接在微信草稿箱改——改完后说**'学习我的修改'**，GzhWrite 都能学到你的风格。"
 
 **8.3 后续操作**：
 

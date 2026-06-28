@@ -1,6 +1,6 @@
-# WeWrite 风格配置
+# GzhWrite 风格配置
 # 复制为 style.yaml 并修改为你的公众号信息
-# 或让 WeWrite 在首次使用时通过对话自动生成
+# 或让 GzhWrite 在首次使用时通过对话自动生成
 
 name: "AI修炼营"
 industry: "科技/互联网/AI "
@@ -23,9 +23,19 @@ word_count: "1500-2500"
 content_style: "干货"
 
 # 写作人格（决定文章语感和 AI 检测通过率）
-# 可选：midnight-friend / industry-observer / sharp-journalist / warm-editor / cold-analyst
+# 可选：midnight-friend / industry-observer / sharp-journalist / warm-editor / cold-analyst / ai-cultivator
 # 详见 personas/ 目录
 writing_persona: "midnight-friend"
+
+# 开头默认钩子类型（U=自动按人格；或手动指定）
+# ai-cultivator 默认 problem_hook / sharp-journalist 默认 cold_open
+# cold-analyst 默认 data_punch / industry-observer 默认 news_hook
+# midnight-friend 默认 personal_moment / warm-editor 默认 scene
+opening_hook: "U"
+
+# 是否在结尾强制 CTA 三件套（紧迫感+低门槛+价值可视化）
+# 默认 true。情感号午夜号可设 false 仅留金句
+cta_strict: true
 
 # 禁忌
 blacklist:

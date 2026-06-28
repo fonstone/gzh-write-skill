@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Humanness scoring for WeWrite articles.
+Humanness scoring for GzhWrite articles.
 
 Three-tier evaluation aligned with writing-guide.md's anti-AI checklist:
 

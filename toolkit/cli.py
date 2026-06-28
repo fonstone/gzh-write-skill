@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-CLI entry point for WeWrite.
+CLI entry point for GzhWrite.
 
 Usage:
     python cli.py preview article.md --theme professional-clean
@@ -25,7 +25,7 @@ CONFIG_PATHS = [
     Path.cwd() / "config.yaml",
     Path(__file__).parent.parent / "config.yaml",  # skill root
     Path(__file__).parent / "config.yaml",          # toolkit dir
-    Path.home() / ".config" / "wewrite" / "config.yaml",
+    Path.home() / ".config" / "gzh-write" / "config.yaml",
 ]
 
 
@@ -224,7 +224,7 @@ def cmd_gallery(args):
 
     # Build gallery HTML
     gallery_html = _build_gallery_html(results, names)
-    output = args.output or "/tmp/wewrite-gallery.html"
+    output = args.output or "/tmp/gzh-write-gallery.html"
     Path(output).write_text(gallery_html, encoding="utf-8")
     print(f"Gallery: {output} ({len(names)} themes)")
 
@@ -246,7 +246,7 @@ def _gallery_sample_markdown():
 
 ## 第一部分
 
-这是一段正常的文章内容，用来展示不同主题的排版效果。WeWrite 支持多种排版主题，每种都有独特的视觉风格。
+这是一段正常的文章内容，用来展示不同主题的排版效果。GzhWrite 支持多种排版主题，每种都有独特的视觉风格。
 
 说实话，选主题这件事——看截图永远不如看实际渲染效果。
 
@@ -262,7 +262,7 @@ def _gallery_sample_markdown():
 
 ```python
 def hello():
-    print("Hello, WeWrite!")
+    print("Hello, GzhWrite!")
 ```
 
 > 好的排版不是让读者注意到设计，而是让读者忘记设计，只记住内容。
@@ -312,7 +312,7 @@ def _build_gallery_html(results, names):
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>WeWrite 主题画廊</title>
+<title>GzhWrite 主题画廊</title>
 <style>
 * {{ margin: 0; padding: 0; box-sizing: border-box; }}
 body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #0f0f0f; color: #fff; }}
@@ -333,7 +333,7 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; 
 </head>
 <body>
 <div class="header">
-  <h1>WeWrite 主题画廊</h1>
+  <h1>GzhWrite 主题画廊</h1>
   <p>{len(names)} 个主题 · 点击卡片查看大图 · 点击「复制 HTML」直接粘贴到公众号编辑器</p>
 </div>
 <div class="grid">
@@ -355,7 +355,7 @@ function copyHTML(name) {{
   }}
 }}
 function selectTheme(name) {{
-  localStorage.setItem('wewrite-theme', name);
+  localStorage.setItem('gzh-write-theme', name);
   // Scroll to card for visual feedback
   const el = document.getElementById('preview-' + name);
   if (el) el.scrollIntoView({{ behavior: 'smooth', block: 'center' }});
@@ -367,7 +367,7 @@ function selectTheme(name) {{
 
 def main():
     parser = argparse.ArgumentParser(
-        prog="wewrite",
+        prog="gzh-write",
         description="Markdown to WeChat HTML converter and publisher",
     )
     sub = parser.add_subparsers(dest="command", required=True)

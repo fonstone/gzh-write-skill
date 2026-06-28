@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Diagnose which anti-AI measures are active in this WeWrite installation.
+Diagnose which anti-AI measures are active in this GzhWrite installation.
 
 Checks: Python deps, config.yaml, style.yaml, enhancement files, dimension variance.
 Outputs a human-readable report or structured JSON.
@@ -278,7 +278,7 @@ def file_status_map(checks):
 
 def format_text(checks, summary, recs):
     """Format human-readable text report."""
-    lines = ["WeWrite Anti-AI Diagnostic", "=" * 26, ""]
+    lines = ["GzhWrite Anti-AI Diagnostic", "=" * 26, ""]
 
     current_group = None
     group_labels = {
@@ -343,7 +343,7 @@ def run_all_checks():
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Diagnose which anti-AI measures are active in this WeWrite installation.",
+        description="Diagnose which anti-AI measures are active in this GzhWrite installation.",
     )
     parser.add_argument("--json", action="store_true", help="Output structured JSON")
     args = parser.parse_args()

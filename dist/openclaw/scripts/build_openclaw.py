@@ -168,7 +168,7 @@ def build(output_dir: Path):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Build OpenClaw-compatible WeWrite skill")
+    parser = argparse.ArgumentParser(description="Build OpenClaw-compatible GzhWrite skill")
     parser.add_argument(
         "-o", "--output",
         default=str(REPO_ROOT / "dist" / "openclaw"),
