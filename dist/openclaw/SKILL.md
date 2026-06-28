@@ -227,6 +227,7 @@ if mode == tech:
 ```
 
 ```
+读取: {baseDir}/references/ai-patterns.md（AI 刻板模式三层扫描：短语层/句式层/节奏层 + 自然度评分体系）
 读取: {baseDir}/references/content-enhance.md（含四个共性高分动作：人话转译/横向对比/技术商业双视角/信息密度节奏）
 读取: {baseDir}/playbook.md（如果存在，按 confidence 分级执行）
 读取: {baseDir}/history.yaml（最近 3 篇的 dimensions + closing_type 字段）
@@ -316,6 +317,8 @@ Category 映射规则：
 ```
 读取: {baseDir}/references/article-archetypes.md
 读取: {baseDir}/references/style-examples.md
+读取: {baseDir}/references/ai-patterns.md（AI 刻板模式三层扫描 + 自然度评分体系，写完初稿后做风格自检）
+读取: {baseDir}/references/ai-patterns-examples.md（AI 模式反面示例 + 正向改写对照，用于改稿阶段参考）
 if mode == tech:
   读取: {baseDir}/references/tech-writing-guide.md（写作规范，含开头层/行文层/内容层/结尾层）
   读取: {baseDir}/references/tech-frameworks.md（框架扩展）
@@ -371,6 +374,12 @@ if mode == tech:
 
 LLM 自行完成，不需要调用脚本。
 
+**AI 模式扫描**（wechat + tech 均适用）：
+```
+读取: {baseDir}/references/ai-patterns.md
+```
+对全文做三层扫描：短语层（废话开场/强调拐杖/互联网黑话/副词/套话/元评论/假亲密/绝对化）→ 句式层（二元对比/否定铺陈/设问/假拟人/旁白叙事/翻译腔/Wh-开头/破碎短句）→ 节奏层（三连列表/破折号/程式化段尾/"So"段首）。全部通过后，做自然度评分（5 维度 1-10 分，≥ 40 通过）。
+
 **tech 模式快速自检替换**：如果 mode=tech，用 tech-writing-guide.md 附录中的校验清单替换原 12 项快速自检。重点检查：
 
 **标题层**：标题通过三项质检（有明确受众、有具体痛点/价值、无夸大噱头）
@@ -378,6 +387,7 @@ LLM 自行完成，不需要调用脚本。
 **行文层**：无连续 3 段纯理论，单段 ≤ 3 行，核心技术概念首次出现有类比+局限标注，每 3-4 小节有中途钩子
 **内容层**：按问题驱动法展开，每个知识点配套踩坑点，无模糊表述
 **结尾层**：使用了 ending_templates.md 中的模板
+**风格层**：按 ai-patterns.md 做三层 AI 模式扫描 + 自然度评分
 **通用**：术语缩写、类比局限、代码环境、数字单位、SSP 原则
 
 ---
