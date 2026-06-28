@@ -12,6 +12,7 @@ description: Use when working with 微信公众号/WeChat official accounts — 
 **模式**：
 - **默认全自动**——一口气跑完 Step 1-8，不中途停下。只在出错时停。
 - **交互模式**——用户说"交互模式"/"我要自己选"时，在选题/框架/配图处暂停。
+- **写作模式**：读取 `style.yaml` 的 `mode` 字段。wechat（默认，公众号写作）或 tech（技术科普）。在 Step 1.3 显示当前模式。
 
 **降级原则**：每一步都有降级方案。Step 1 检测到的降级标记（`skip_publish`、`skip_image_gen`）在后续 Step 自动生效，不重复报错。
 
@@ -35,7 +36,7 @@ description: Use when working with 微信公众号/WeChat official accounts — 
 - 用户说"学习排版"/"学排版" → `python3 {skill_dir}/scripts/learn_theme.py <url> --name <name>`，用户需提供一个公众号文章 URL 和主题名称。提取完成后提示用户设置 `style.yaml` 的 `theme` 字段。
 - 用户说"学习这篇文章"/"导入范文" + URL → `python3 {skill_dir}/scripts/fetch_article.py <url> -o /tmp/article.md && python3 {skill_dir}/scripts/extract_exemplar.py /tmp/article.md -s <账号名>`，从公众号文章 URL 提取正文并导入范文库。支持三级降级（requests → Playwright → 手动 HTML）。
 - 用户说"看看文章数据" → `读取: {skill_dir}/references/effect-review.md`
-- 用户说"检查一下"/"自检"/"这篇文章怎么样" → 对最近一篇生成的文章（或用户指定的文章）执行自检，输出生成报告：
+- 用户说"检查一下"/"自检"/"这篇文章怎么样" → 对最近一篇生成的文章（或用户指定的文章）执行**四层自检金字塔**，输出标准质检报告：
 
   **第一部分：生成档案**（告诉用户这篇文章是怎么来的）
   1. 读取 `history.yaml` 最近一条记录，提取：
@@ -45,22 +46,20 @@ description: Use when working with 微信公众号/WeChat official accounts — 
      - 内容增强策略（角度发现/密度强化/细节锚定/真实体感）
      - 范文风格库是否命中（用了哪几篇 exemplar，还是 fallback 到种子）
      - playbook 中生效的规则条数
-  2. 如果 history.yaml 无记录或用户指定了外部文章 → 跳过此部分，提示"这篇文章不是 GzhWrite 生成的，只做质量检查"
+  2. 如果 history.yaml 无记录或用户指定了外部文章 → 跳过此部分，提示"这篇文章不是 GzhWrite 生成的，只做四层质量检查"
 
-  **第二部分：质量检查**（告诉用户哪里还能改）
-  1. `python3 {skill_dir}/scripts/humanness_score.py {article_path} --json`
-  2. Agent 解读 JSON 中每项得分，翻译为用户可操作的建议，格式：
-     - 每条建议定位到具体段落或句子（"第 3 段连续 4 句长度接近"）
-     - 给出具体改法（"建议把第 3 句拆成两个短句"、"这里可以加一句你自己的感受"）
-     - 按影响度排序，最多 5 条
-  3. 对新检查项的特别说明：
-     - **翻译腔**得分低 → 建议"从句拆开，主语该省则省，把长定语改成短句"
-     - **句式重复**得分低 → 建议标出重复的句式，给出替换表达
-     - **自标深度**禁用词命中 → 建议直接删掉该句，让后文内容自己显出深度
-  4. 如果所有项得分都不错 → "这篇文章质量不错，建议在编辑锚点处加入你的个人内容就可以发了。"
+  **第二部分：四层质检**（按 self-check-pyramid.md 标准执行 L1-L4）
+  1. **L1 硬性规则**：运行 `python3 {skill_dir}/scripts/l1_hard_rules.py {article_path} --json`，逐项修复命中项
+  2. **L2 风格一致性**：按清单检查开头/节奏/口语化/断裂句/标点二次确认
+  3. **L3 内容质量**：按清单检查观点支撑/知识输出/文化升维/对立面同理心/类型专项/逐一展示
+  4. **L4 活人感终审**：通读回答核心问题，4维度打分
+  5. `python3 {skill_dir}/scripts/humanness_score.py {article_path} --json` 作为补充参考
 
-  **输出格式**：自然语言报告，不输出 JSON 或分数（用户不需要看数字）
+  **输出格式**：标准四层质检报告（见 self-check-pyramid.md 末尾模板），自然语言，不输出 JSON
 - 用户说"更新"/"更新 GzhWrite"/"升级" → 在 `{skill_dir}` 执行 `git pull origin main`，完成后告知版本变化
+- 用户说"切换到技术科普模式"/"写技术文章" → 修改 `{skill_dir}/style.yaml` 的 `mode` 为 `tech`，告知用户"已切换到技术科普模式"
+- 用户说"切回公众号模式"/"写公众号文章" → 修改 `{skill_dir}/style.yaml` 的 `mode` 为 `wechat`，告知用户"已切换回公众号模式"
+- 用户说"当前模式" → 读取 style.yaml 的 `mode` 字段，告知用户当前模式
 
 ---
 
@@ -125,7 +124,9 @@ cd {skill_dir} && git fetch origin main --quiet 2>/dev/null
 检查: {skill_dir}/style.yaml
 ```
 
-- 存在 → 提取 `name`、`topics`、`tone`、`voice`、`blacklist`、`theme`、`cover_style`、`author`、`content_style`
+- 存在 → 提取 `name`、`topics`、`tone`、`voice`、`blacklist`、`theme`、`cover_style`、`author`、`content_style`，检查 `mode` 字段：
+  - `mode == tech` → 额外加载 `{skill_dir}/style-tech.yaml`，覆盖 name/tone/voice/topics/core_principles；`writing_persona` 强制设为 `tech-explainer`；告知用户"当前模式：技术科普（OS/AI/嵌入式）"
+  - `mode == wechat` 或其他 → 保持原逻辑；告知用户"当前模式：公众号写作"
 - 不存在 → `读取: {skill_dir}/references/onboard.md`，完成后回到 Step 1
 
 如果用户直接给了选题 → 跳到 Step 3（仍需框架选择和素材采集，不可跳过）。
@@ -171,6 +172,13 @@ python3 {skill_dir}/scripts/seo_keywords.py --json {关键词}
 
 每个选题含标题、评分、点击率潜力、SEO 友好度、推荐框架。
 
+**选题通过 HKR 质检**：对最高分选题做快速 HKR（Happy/Knowledge/Resonance）评审：
+- S 级（三项兼备）→ 直接进入 Step 3
+- 及格（至少两项）→ 通过
+- 不足两项 → 换下一个选题或调整切入角度
+- 附加角色代入法（"一个很忙的普通用户"/"一个爱玩的朋友"/"一个焦虑的学习者"）验证——至少两个角色回答"是"才值得写
+- **tech 模式**（mode=tech）：HKR 权重调整为 H=10%/K=60%/R=30%，pass 条件改为 Knowledge ≥ 4/5 AND Accuracy ≥ 4/5。角色代入法角色不变但问题改为："一个入门开发者"→能帮我建立正确的心智模型吗？"一个进阶开发者"→有我不知道的信息增量吗？"一个深度从业者"→实践部分可操作吗？
+
 - 自动模式 → 选最高分
 - 交互模式 → 展示全部，等用户选
 
@@ -186,11 +194,15 @@ python3 {skill_dir}/scripts/seo_keywords.py --json {关键词}
 
 7 套框架（痛点/故事/清单/对比/热点解读/纯观点/复盘），自动选推荐指数最高的。
 
+如果 mode=tech，额外加载 `{skill_dir}/references/tech-frameworks.md`，合并到框架选择列表中（新增 4 套：原理演进/技术对比/实践指南/源码拆解）。
+
 **3.2 素材采集 + 内容增强**（合并执行，共用搜索结果）：
 
 ```
 读取: {skill_dir}/references/content-enhance.md
 ```
+
+如果 mode=tech，使用 content-enhance.md 中 tech 模式行的增强策略（角度发现→认知缺口、密度强化→知识密度、细节锚定→代码锚/实验锚、真实体感→业界案例）。
 
 根据 3.1 选定的框架类型，一次搜索同时完成素材采集和内容增强：
 
@@ -213,8 +225,19 @@ python3 {skill_dir}/scripts/seo_keywords.py --json {关键词}
 
 ### Step 4: 写作
 
+**Tech 模式**（mode=tech）走以下分支，wechat 模式保持原逻辑：
+
 ```
-读取: {skill_dir}/references/writing-guide.md
+if mode == tech:
+  读取: {skill_dir}/references/tech-writing-guide.md（替换 writing-guide.md，含开头层/行文层/内容层/结尾层完整规范）
+  读取: {skill_dir}/references/headline_templates.md（标题生成 SOP + 质检规则）
+  读取: {skill_dir}/references/ending_templates.md（结尾模板库，写作 SOP 最后一步强制执行）
+  读取: {skill_dir}/references/tech-common-pitfalls.md（领域常见踩坑库，问题驱动写作法配套使用）
+否则:
+  读取: {skill_dir}/references/writing-guide.md
+```
+
+```
 读取: {skill_dir}/references/content-enhance.md（含四个共性高分动作：人话转译/横向对比/技术商业双视角/信息密度节奏）
 读取: {skill_dir}/playbook.md（如果存在，按 confidence 分级执行）
 读取: {skill_dir}/history.yaml（最近 3 篇的 dimensions + closing_type 字段）
@@ -240,9 +263,11 @@ python3 {skill_dir}/scripts/seo_keywords.py --json {关键词}
 如果 style.yaml 没有 writing_persona 字段 → 默认 midnight-friend
 ```
 
+tech 模式强制使用 tech-explainer 人格。
+
 人格文件定义了：语气浓度、数据呈现方式、情绪弧线、段落节奏、不确定性表达模板等。作为写作的硬性约束执行。
 
-**优先级**：playbook.md（confidence ≥ 5 的规则）> persona > 范文风格 > writing-guide.md。writing-guide 是底线（基础写作规范），范文提供风格示范（句长节奏、情绪表达方式），persona 在此基础上特化风格参数（语气浓度、数据呈现），playbook 中高置信度规则是用户个性化的最终覆盖。playbook 中 confidence < 5 的规则作为软性参考。
+**优先级**：playbook.md（confidence ≥ 5 的规则）> persona > 范文风格 > tech-writing-guide.md / writing-guide.md。writing-guide/tech-writing-guide 是底线（基础写作规范），范文提供风格示范（句长节奏、情绪表达方式），persona 在此基础上特化风格参数（语气浓度、数据呈现），playbook 中高置信度规则是用户个性化的最终覆盖。playbook 中 confidence < 5 的规则作为软性参考。
 
 **4.3 范文风格注入**（有 `references/exemplars/index.yaml` 时执行）：
 
@@ -273,6 +298,9 @@ Category 映射规则：
 | 清单型 / 对比型 | list-practical |
 | 热点解读型 / 纯观点型 | hot-take |
 | 其他 | general |
+| 原理演进型 / 源码拆解型（tech） | tech-deep |
+| 实践指南型（tech） | tech-practical |
+| 技术对比型（tech） | tech-comparison |
 
 如果匹配到的范文不足 3 篇，用 general category 补足。
 
@@ -295,25 +323,41 @@ Category 映射规则：
 建库命令：`python3 {skill_dir}/scripts/extract_exemplar.py article.md`
 
 **4.4 写文章**：
-- H1 标题（20-28 字） + H2 结构，2000-3000 字
-- **五段式骨架**（见 frameworks.md 通用五段式骨架）：段一场景钩子 ≈200 字 / 段二背景机制拆解 ≈500-700 字 / 段三核心干货 ≈900-1300 字 / 段四延伸冲突 ≈300-400 字 / 段五金句+CTA ≈100 字。字数是引导不是死线，但功能段（钩子/干货/延伸/收尾）不能省
-- **开头钩子**：段一使用 writing-guide.md 开头钩子技法三法之一（故事场景/问题戳焦虑/数据现象），用行为标签锁定人群
-- **派别分支**：段二段四按派别分支执行——技术派补人话版路径 + 论文 vs 现实 gap；产业派补商业/政策语境 + 对具体角色的影响
+
+```
+读取: {skill_dir}/references/article-archetypes.md
+读取: {skill_dir}/references/style-examples.md
+if mode == tech:
+  读取: {skill_dir}/references/tech-writing-guide.md（写作规范，含开头层/行文层/内容层/结尾层）
+  读取: {skill_dir}/references/tech-frameworks.md（框架扩展）
+  读取: {skill_dir}/references/headline_templates.md（标题生成 SOP——强制使用三类模板之一，标题必须通过三项质检）
+  读取: {skill_dir}/references/ending_templates.md（结尾模板库——写作 SOP 最后一步，不可跳过）
+  读取: {skill_dir}/references/tech-common-pitfalls.md（问题驱动写作法的踩坑库配套）
+```
+
+先判断文章属于哪种**写作原型**：wechat 模式使用 article-archetypes.md 的 5 种原型（调查实验/产品体验/现象解读/工具分享/方法论）；tech 模式使用 tech-frameworks.md 的 4 种框架（原理演进/技术对比/实践指南/源码拆解）。
+
+**标题生成 SOP（tech 模式强制）**：
+1. 按 headline_templates.md 的三类模板（痛点共鸣型/好奇揭秘型/对比选型型）生成 3 个备选标题
+2. 对每个标题执行三项质检：有明确受众、有具体痛点/价值、无夸大噱头
+3. 三项全部通过 → 选最佳；任一不通过 → 自动重写，最多 3 轮
+4. 仍不通过 → 标记编辑锚点，提示用户手动调整
+
+- H1 标题（20-28 字，禁止纯名词式标题） + H2 结构
+- **骨架**：wechat 模式用五段式骨架（见 frameworks.md）；tech 模式用七段式骨架（见 tech-writing-guide.md 章节结构规范表）
+- **开头钩子**：wechat 模式使用 writing-guide.md 开头钩子技法三法之一；tech 模式强制使用 tech-writing-guide.md 的三段式开头结构（痛点场景 + 问题定义 + 阅读钩子），禁止"近年来""随着发展""众所周知"等禁句
 - **段三变体**：按文章类型选——测评类→横向对比表+实测结论；趋势类→3 点配案例/数据；实操类→1. 2. 3. 步骤+模板
 - **素材 + 增强约束**：Step 3.2 的素材和增强材料分散嵌入各 H2 段落。增强策略的核心输出（角度/密度要点/细节/用户声音）必须贯穿全文，不只装饰性出现一次
-- **四个共性高分动作**（见 content-enhance.md）：人话转译、横向对比、技术商业双视角、信息密度节奏——适用的动作必须执行
+- **写作规范**：wechat 模式用 writing-guide.md 的基础规则（禁用词、句长方差、词汇混用、翻译腔免疫、句式不重复、不自标深度、最高法则等）；tech 模式用 tech-writing-guide.md 的五层规范（开头层/行文层/内容层/结尾层/术语规范）
 - **排版纪律**：重点加粗≤全文 5%；每 200-300 字一个 H2；复杂信息用表/标号；配图锚点 ≥3 张（架构图/对比表/实测截图）；超 3500 字分 Part 加目录锚点
-- **写作人格**：按 4.2 加载的人格参数写作（数据呈现方式、个人声音浓度、不确定性表达等）
-- **收尾方式**：persona 的 `closing_tendency` 仅作为倾向参考。根据文章内容和情绪弧线自行判断最自然的收尾方式。如果 history.yaml 中最近 3 篇有 `closing_type` 字段，避免使用相同的收尾类型
-- **写作规范**：writing-guide.md 中的基础规则（禁用词、句长方差、词汇混用、翻译腔免疫、句式不重复、不自标深度、最高法则等）在初稿阶段生效。磨阶段的反风格 checklist、口语检验、意外检验、中文重写在 4.5 快速自检中执行
-- 2-3 个编辑锚点：`<!-- ✏️ 编辑建议：在这里加一句你自己的经历/看法 -->`
-- 可选容器语法：`:::dialogue`、`:::timeline`、`:::callout`、`:::quote`
+- **收尾方式**：wechat 模式按 persona closing_tendency；tech 模式强制使用 ending_templates.md 的三类模板（金句总结型/互动提问型/延伸预告型），不强制 CTA
+- 2-3 个编辑锚点
 
-保存到 `{skill_dir}/output/{date}-{slug}.md`
+保存到 `{skill_dir}/output/{date}-{slug}.md`。tech 模式文件名使用 `-tech-` 前缀。
 
 **4.5 快速自检**（写完后立即执行，减少 Step 5 重写概率）：
 
-对初稿做 10 项快速扫描，**当场修复**，不留到 Step 5：
+对初稿做 12 项快速扫描，**当场修复**，不留到 Step 5：
 
 **写作层面**：
 1. **禁用词扫描**：检查 writing-guide.md 2.1 的禁用词列表（含自标深度/宣传腔/机械冗长），命中的直接替换
@@ -326,62 +370,96 @@ Category 映射规则：
 6. **增强贯穿**：增强策略的核心输出是否只出现在一段？如果是，在其他 H2 中补充
 7. **金句检查**：全文是否有至少 1 句可独立截图转发的句子？如果没有，在情绪高点处补一句
 
+**新增 ─ 叙事与结构层面**：
+8. **对立面理解**：讲核心观点前是否先站到了对方角度？是否只是单向输出判断而无同理心铺垫？
+9. **假设性例子**：有没有出现"比如有一次..."/"假设你是一个..."这类编造场景？有则删掉或改真实案例/标注编辑锚点
+10. **回环呼应（契诃夫之枪）**：前文埋的钩子在后面回扣了吗？如果开头有悬念式意象，结尾是否以变化的形式重现？
+
 **磨 + 最高法则**：
-8. **反风格 checklist**：逐段检查：在解释→换场景；在罗列→砍到一个；同一论点重复→删第二个；在宣告深度→删宣告；助手都写得出的句子→改或删
-9. **口语检验**：逐段读，会这样跟一个聪明的朋友说吗？不会→改。过不了这关的段落整段重写
-10. **意外检验**：写这篇时发现了什么自己之前没想到的？它够显眼吗？如果没有意外发现→回去切得更狠
+11. **反风格 checklist**：逐段检查：在解释→换场景；在罗列→砍到一个；同一论点重复→删第二个；在宣告深度→删宣告；助手都写得出的句子→改或删
+12. **口语检验**：逐段读，会这样跟一个聪明的朋友说吗？不会→改。过不了这关的段落整段重写
+13. **意外检验**：写这篇时发现了什么自己之前没想到的？它够显眼吗？如果没有意外发现→回去切得更狠
 
 LLM 自行完成，不需要调用脚本。
 
+**tech 模式快速自检替换**：如果 mode=tech，用 tech-writing-guide.md 附录中的校验清单替换原 12 项快速自检。重点检查：
+
+**标题层**：标题通过三项质检（有明确受众、有具体痛点/价值、无夸大噱头）
+**开头层**：前 300 字为三段式结构（痛点场景 + 问题定义 + 阅读钩子），无禁句命中
+**行文层**：无连续 3 段纯理论，单段 ≤ 3 行，核心技术概念首次出现有类比+局限标注，每 3-4 小节有中途钩子
+**内容层**：按问题驱动法展开，每个知识点配套踩坑点，无模糊表述
+**结尾层**：使用了 ending_templates.md 中的模板
+**通用**：术语缩写、类比局限、代码环境、数字单位、SSP 原则
+
 ---
 
-### Step 5: SEO + 验证
+### Step 5: SEO + 四层自检金字塔
 
 ```
 读取: {skill_dir}/references/seo-rules.md
+if mode == tech:
+  读取: {skill_dir}/references/tech-self-check-pyramid.md（替换 self-check-pyramid.md）
+否则:
+  读取: {skill_dir}/references/self-check-pyramid.md
 ```
 
 **5.1 SEO**：3 个备选标题（标注钩子类型：时效数据/精准人群/学术权威）+ 摘要（≤40 字）+ 5 标签 + 关键词密度优化
 
-**5.2 质量验证**（两个维度，每项逐一检查）：
+**5.2 基础规则快检**（tech 模式替换为 tech 检查项；wechat 模式保持原规则）：
 
-**A. 写作质量**（writing-guide.md 基础规则）：
-
-| 检查项 | 标准 | 规则 |
+| 检查项 | wechat 标准 | tech 标准 |
 |--------|------|------|
-| 句长方差 | 最短与最长句相差 ≥ 30 字 | 1.1 |
-| 词汇温度 | 任意 500 字 ≥ 3 种温度 | 1.2 |
-| 段落节奏 | 无连续 2 个相近长度段落 | 1.3 |
-| 情绪极性 | 负面情绪 ≥ 2 处，无平铺直叙 | 1.4 |
-| 禁用词 | 命中数 = 0（含自标深度/宣传腔/机械冗长） | 2.1 |
-| 翻译腔 | 翻译腔特征密集段落数 = 0 | 2.5 |
-| 句式不重复 | 同一种句式结构全文 ≤ 1 次 | 2.6 |
-| 自标深度 | 全文 0 处自标深度标记 | 3.5 |
-| 真实锚定 | 每个 H2 ≥ 1 条真实素材，零编造 | 3.1 |
-| 具体性 | 每 500 字 ≥ 2 处具体细节 | 3.2 |
+| 句长方差 | 最短与最长句相差 ≥ 30 字 | 最短与最长句相差 ≥ 30 字（保留） |
+| 词汇温度 | 任意 500 字 ≥ 3 种温度 | 任意 500 字 ≥ 3 种温度（保留） |
+| 段落节奏 | 无连续 2 个相近长度段落 | 无连续 2 个相近长度段落（保留） |
+| 禁用词 | 命中数 = 0 | 命中数 = 0（保留原规则 + tech 新增禁用模式） |
+| 翻译腔 | 翻译腔特征密集段落数 = 0 | 翻译腔特征密集段落数 = 0（保留） |
+| 句式不重复 | 同一种句式结构全文 ≤ 1 次 | 同一种句式结构全文 ≤ 1 次（保留） |
+| 缩写管理（tech） | — | 所有缩写首次出现有全称 |
+| 数字单位（tech） | — | 所有技术指标数字带单位 |
+| 代码可运行（tech） | — | 代码块含语言标注+运行环境+预期输出 |
 
-**B. 内容质量**（基于 Step 3.2 的增强策略检查）：
+不通过 → **定向修复**：只替换不达标的具体句子/段落，不动已通过部分。每轮最多改 3 处，改完立即重新检查该项。2 轮仍不过 → 标注跳过，继续下一项。
 
-| 检查项 | 标准 | 适用框架 |
-|--------|------|---------|
-| 增强贯穿 | 增强策略的核心输出（角度/密度/细节/体感）在全文可见，不只出现在一段 | 所有 |
-| 开头钩子 | 前 3 句用了三法之一（故事场景/问题戳焦虑/数据现象），非背景铺垫 | 所有 |
-| 金句密度 | 至少 1 处可独立截图转发的句子 | 所有 |
-| CTA 三要素 | 结尾 CTA 同时命中紧迫感+低门槛+价值可视化（见 seo-rules.md） | 所有 |
-| 人话转译 | 技术概念有日常类比转译，非入门读者也能懂 | 热点解读/纯观点 |
-| 横向对比 | 同标准实测+踩坑必报+明确建议 | 对比/清单 |
-| 技术商业双视角 | 至少 1 处"技术→对钱意味着什么"的判断 | 热点解读/纯观点 |
-| 密度节奏 | 每 200-300 字有 H2，重点加粗，段落不超 3 行 | 所有 |
-| 操作密度 | 每个 H2 有可操作要点（工具/步骤/参数） | 痛点/清单 |
-| 角度锐度 | 核心观点能引发同意或反对，不是"两面都有道理" | 热点解读/纯观点 |
-| 场景感 | 至少 2 处有时间/地点/对话等画面细节 | 故事/复盘 |
-| 真实声音 | 至少 1 处引用真实用户评价或体验 | 对比 |
+**5.3 四层自检金字塔**（核心质检）：
 
-不通过 → **定向修复**：只替换不达标的具体句子/段落，不动已通过的部分。每轮最多改 3 处，改完立即重新检查该项。2 轮仍不过 → 标注跳过，继续下一项。
+**Wechat 模式**：按 self-check-pyramid.md 标准执行 L1-L4，与当前一致。
+**Tech 模式**：按 tech-self-check-pyramid.md 标准执行 L0-L4。
 
-**5.3 脚本辅助验证**（补充 5.2 的逐项检查）：
+**L1 硬性规则自动扫描**（脚本化，必须 0 容忍）：
+```bash
+python3 {skill_dir}/scripts/l1_hard_rules.py {article_path} --json --mode {mode}
+```
+- wechat 模式：覆盖 L1-1~L1-6：禁用词/禁用标点/结构套话/空泛工具名/假设性例子/AI 角色边界
+- tech 模式：覆盖 L1-1~L1-6：技术编造扫描/API验证/类比局限性/代码可运行/缩写管理/数字单位
+- 命中即逐个定向替换，不留到人工
 
-Agent 在 5.2 检查过程中同步完成综合评估（各 H2 之间的语气差异度、信息密度的高低交替、段落间的节奏变化、整体阅读流畅度），产出 0-1 分数。
+**L2 风格一致性模式匹配**（半自动）：
+- wechat：开头/节奏/口语化/断裂句/标点/回环呼应/情绪落差
+- tech：分层递进/SSP原则/逻辑链连续性/类比映射/过渡词多样性
+- 可脚本辅助计数，人工判断通过/不通过
+
+**L3 内容质量深度审查**（人工+AI协作）：
+- wechat：观点支撑/知识输出/文化升维/对立面同理心/类型专项/升番/案例公正性/契诃夫之枪
+- tech：知识准确性/信息增量/类比保真度/实践价值/复杂度控制/争议处理
+- Agent 按清单逐项检查，输出具体问题定位到段落
+
+**L4 终审**（核心人工判断）：
+- wechat：**活人感**——"像真人聊天还是AI输出？"4维度打分
+- tech：**工程感**——信任度/精准度/完整度/可操作度 4维度打分
+- 任何维度不达标按对应金字塔的修复指引执行（逐维度精确修复）
+
+**输出**：标准质检报告格式（见对应金字塔末尾模板）
+
+**修复流程**：
+- L1/L2 失败 → 定向修复 → 重新跑 L1/L2
+- L3 失败 → 重审段落补案例/改写/调整排列顺序 → 重新检查该项
+- L4 失败 → 定位不达标维度 → 按对应修复指引精确修复 → 重新 L4
+- 最多 2 轮全流程，仍不通过 → 标记 DONE_WITH_CONCERNS 列出遗留问题
+
+**5.4 脚本辅助验证**（补充 5.2/5.3 的逐项检查）：
+
+Agent 在检查过程中同步完成综合评估（各 H2 间语气差异度、信息密度高低交替、段落间节奏变化、整体阅读流畅度），产出 0-1 分数。
 
 ```bash
 python3 {skill_dir}/scripts/humanness_score.py {article_path} --json --tier3 {agent_tier3_score}
@@ -390,7 +468,9 @@ python3 {skill_dir}/scripts/humanness_score.py {article_path} --json --tier3 {ag
 解读 JSON 中 `composite_score`（0=质量高, 100=问题多）：
 - < 30 → 通过，继续 Step 6
 - 30-50 → 查看 `param_scores` 中最低分的 1-2 项，只修复对应的具体句子（不重写整段），改完重新打分。1 轮即可
-- \> 50 → 取 `param_scores` 最低的 2-3 项，逐项定向修复（每项只改最相关的 1-2 处），最多 2 轮。仍 > 50 则标记 DONE_WITH_CONCERNS 继续
+- > 50 → 取 `param_scores` 最低的 2-3 项，逐项定向修复（每项只改最相关的 1-2 处），最多 2 轮。仍 > 50 则标记 DONE_WITH_CONCERNS 继续
+
+tech 模式下 humanness_score 仅作补充参考，工程感（L4）评估优先。
 
 ---
 
@@ -462,7 +542,7 @@ python3 {skill_dir}/toolkit/cli.py preview {markdown} --theme {theme} --no-open 
   title: "{标题}"
   topic_source: "热点抓取"  # 或 "用户指定"
   topic_keywords: ["{词1}", "{词2}"]
-  output_file: "{output 文件路径}"  # e.g. output/2026-03-31-zhangxue-slow-accumulation.md
+  output_file: "{output 文件路径}"  # e.g. output/2026-03-31-zhangxue-slow-accumulation.md（tech 模式使用 -tech- 前缀 e.g. output/2026-06-28-tech-page-fault-mechanism.md）
   framework: "{框架}"
   enhance_strategy: "{增强策略}"  # angle_discovery/density_boost/detail_anchoring/real_feel
   word_count: {字数}
