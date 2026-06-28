@@ -60,7 +60,7 @@
 | 标题生成 SOP | 3 类模板（痛点共鸣/好奇揭秘/对比选型）+ 3 项质检（受众/痛点/无夸大），禁止纯名词式标题 | `references/headline_templates.md` |
 | 开头 300 字留人 | 三段式结构（痛点场景 + 问题定义 + 阅读钩子）+ 禁句黑名单 | `references/tech-writing-guide.md` |
 | 行文节奏控制 | 单段 ≤ 3 屏行 + 单句 ≤ 25 字 + 原理/类比交替 + 每 3-4 小节中途钩子 + 密度交替 | `references/tech-writing-guide.md` |
-| 叙事驱动写作 | 四要素叙事线（背景→问题→演进→方案）+ 三种叙事原型（演进史式/对抗式/揭秘式） | `references/tech-narrative-architecture.md` |
+| 叙事驱动写作 | 四要素叙事线（背景→问题→演进→方案）+ 三种叙事原型（演进史式/对抗式/均衡对比式/揭秘式） | `references/tech-narrative-architecture.md` |
 | 说服力驱动写作 | Cialdini 七原则适应版 + RISE 段落节奏（Recognize→Identify→Solve→Evidence）+ 注意力引导系统 | `references/tech-writing-persuasion.md` |
 | 知识点优先级过滤 | P0/P1/P2 优先级标注 + 四象限覆盖（是什么/为什么/何时用/怎么用） | `references/tech-writing-guide.md` |
 | AI 刻板模式扫描 | 三层清单：短语层（禁用词/强调拐杖/黑话/软文/套话/元评论）+ 句式层（二元对比/设问/假拟人/旁白）+ 节奏层（三连/破折号/程式化结尾）+ 5 维自然度评分 | `references/ai-patterns.md` + `references/ai-patterns-examples.md` |
@@ -279,7 +279,8 @@ gzh-write-skill/
 │   ├── build_playbook.py       # 从历史文章生成 Playbook
 │   ├── learn_edits.py          # 学习人工修改（飞轮核心）
 │   ├── humanness_score.py      # 文章质量打分（11 项检测）
-│   ├── l1_hard_rules.py        # L1 硬性规则自动扫描（含 tech 模式）
+│   ├── l1_hard_rules.py        # L1 硬性规则自动扫描（含 tech 模式，自动跳过代码块）
+│   ├── narrative_audit.py      # 叙事线审计（检查 H2 段落覆盖四要素）
 │   ├── extract_exemplar.py     # 范文风格提取（SICO 式 few-shot 建库）
 │   ├── learn_theme.py          # 从公众号文章 URL 提取排版主题
 │   ├── fetch_article.py        # 从公众号 URL 提取正文为 Markdown
@@ -421,6 +422,12 @@ python3 scripts/extract_exemplar.py --list                   # 查看范文库
 
 # 文章质量检查
 python3 scripts/humanness_score.py article.md --verbose
+
+# 叙事线审计（检查每个 H2 是否覆盖背景/问题/演进/方案）
+python3 scripts/narrative_audit.py article.md
+
+# 硬性规则扫描（禁用词/缩写/数字单位/编造数据/类比局限）
+python3 scripts/l1_hard_rules.py article.md --mode tech
 
 # 从公众号文章学习排版主题
 python3 scripts/learn_theme.py https://mp.weixin.qq.com/s/xxxx --name my-style

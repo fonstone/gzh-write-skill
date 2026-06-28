@@ -126,6 +126,10 @@ AI_BOUNDARY_MARKERS = [
     r"(?:经过|通过)[^，。]{5,}(?:我)?(?:发现|意识到|理解到)",
 ]
 
+def strip_code_blocks(text):
+    """移除代码块，避免误判代码/JSON/配置中的关键词"""
+    return re.sub(r'```[\s\S]*?```', '', text)
+
 def scan_forbidden_words(text):
     hits = []
     for word, replacement in FORBIDDEN_WORDS:
@@ -206,19 +210,49 @@ def scan_acronym_first_use(text):
     acronyms = set(re.findall(r'\b([A-Z]{2,8})\b', text))
     hits = []
     for acr in sorted(acronyms):
-        # Skip common non-tech acronyms
-        if acr in ('AI', 'OK', 'UI', 'UX', 'API', 'CPU', 'GPU', 'OS', 'PC', 'IP', 'ID', 'IO', 'CLI', 'SDK'):
+        # Skip common tech/measurement acronyms
+        if acr in ('AI', 'OK', 'UI', 'UX', 'API', 'CPU', 'GPU', 'OS', 'PC', 'IP', 'ID', 'IO', 'CLI', 'SDK',
+                    'GB', 'MB', 'KB', 'TB', 'PB', 'Hz', 'MHz', 'GHz', 'KHz',
+                    'HTTP', 'HTTPS', 'TCP', 'UDP', 'DNS', 'DHCP',
+                    'JSON', 'XML', 'YAML', 'TOML', 'CSV',
+                    'HTML', 'CSS', 'JS', 'TS', 'JSX', 'TSX',
+                    'SSH', 'SSL', 'TLS', 'FTP', 'SFTP',
+                    'UTF', 'ASCII', 'BASE64', 'SHA', 'AES', 'RSA',
+                    'UUID', 'GUID', 'JWT', 'OAuth', 'CORS', 'REST',
+                    'MCP', 'LLM', 'RAG', 'LSP', 'IDE',
+                    'DB', 'SQL', 'NoSQL', 'ORM', 'CRUD',
+                    'CI', 'CD', 'DevOps', 'QA', 'PR', 'WIP',
+                    'NaN', 'Inf', 'null', 'None', 'True', 'False',
+                    'stdin', 'stdout', 'stderr',
+                    'GET', 'POST', 'PUT', 'PATCH', 'DELETE',
+                    'GRANT', 'REVOKE', 'SELECT', 'INSERT', 'UPDATE', 'CREATE', 'ALTER', 'DROP', 'TRUNCATE',
+                    'MAX', 'MIN', 'AVG', 'SUM', 'COUNT',
+                    'VScode', 'VSCode', 'IntelliJ', 'PyCharm'):
             continue
         first_pos = text.index(acr)
         # Check if full name appears before this position
         before = text[max(0,first_pos-60):first_pos]
-        if not re.search(r'[\u4e00-\u9fff]{2,30}\(\s*' + re.escape(acr) + r'\s*\)', text[:first_pos+len(acr)]):
+        signal = re.escape(acr)
+        if re.search(r'[（(]\s*' + signal + r'\s*[)）]', text[:first_pos+len(acr)]):
+            continue
             hits.append({"rule": "acronym_first_use", "position": first_pos, "warning": f"缩写 {acr} 首次出现未标注全称", "context": f"...{before}[{acr}]..."})
     return hits[:10]  # limit to 10 hits
 
 def scan_unit_missing(text):
     """Scan for technical indicators without units."""
-    tech_contexts = re.finditer(r'.{0,30}(延迟|提升|降低|吞吐|内存|带宽|频率|容量|大小|速度|耗时|大小|占用).{0,50}', text)
+    # Skip table rows and headings — they trigger false positives on concepts/headers
+    lines = text.split('\n')
+    filtered_lines = []
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith('|') and stripped.endswith('|'):
+            continue
+        if stripped.startswith('## ') or stripped.startswith('### '):
+            continue
+        filtered_lines.append(line)
+    filtered = '\n'.join(filtered_lines)
+
+    tech_contexts = re.finditer(r'.{0,30}(延迟|提升|降低|吞吐|内存|带宽|频率|容量|大小|速度|耗时|大小|占用).{0,50}', filtered)
     hits = []
     seen = set()
     for m in tech_contexts:
@@ -243,24 +277,25 @@ def main():
     
     path = Path(args.article_path)
     text = path.read_text(encoding='utf-8')
+    clean_text = strip_code_blocks(text)
     
     if args.mode == "tech":
         results = {
-            "fabricated_data": scan_fabricated_data(text),
-            "analogy_limitation": scan_analogy_limitation(text),
-            "acronym_first_use": scan_acronym_first_use(text),
-            "unit_missing": scan_unit_missing(text),
+            "fabricated_data": scan_fabricated_data(clean_text),
+            "analogy_limitation": scan_analogy_limitation(clean_text),
+            "acronym_first_use": scan_acronym_first_use(clean_text),
+            "unit_missing": scan_unit_missing(clean_text),
         }
         # Also run original wechat scans in tech mode (subset)
-        results["forbidden_words"] = scan_forbidden_words(text)
+        results["forbidden_words"] = scan_forbidden_words(clean_text)
     else:
         results = {
-            "forbidden_words": scan_forbidden_words(text),
-            "forbidden_punct": scan_forbidden_punct(text),
-            "structural_cliches": scan_structural_cliches(text),
-            "generic_tools": scan_generic_tools(text),
-            "hypothetical_examples": scan_hypothetical_examples(text),
-            "ai_boundary_warnings": scan_ai_boundary(text),
+            "forbidden_words": scan_forbidden_words(clean_text),
+            "forbidden_punct": scan_forbidden_punct(clean_text),
+            "structural_cliches": scan_structural_cliches(clean_text),
+            "generic_tools": scan_generic_tools(clean_text),
+            "hypothetical_examples": scan_hypothetical_examples(clean_text),
+            "ai_boundary_warnings": scan_ai_boundary(clean_text),
         }
     
     total_hits = sum(len(v) for v in results.values())
