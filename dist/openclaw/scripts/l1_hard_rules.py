@@ -264,11 +264,95 @@ def scan_unit_missing(text):
                 hits.append({"rule": "unit_missing", "position": m.start(), "warning": "技术指标可能缺少单位", "context": m.group()[:60]})
     return hits[:10]
 
+
+# ── Code block & P0 quadrant checks (tech mode) ──
+
+CODE_REQUIREMENTS = {
+    "源码拆解型": {"min_blocks": 2, "reason": "源码拆解必须以可运行代码为核心"},
+    "实践指南型": {"min_blocks": 3, "reason": "实践指南每一步必须配可执行命令"},
+    "技术对比型": {"min_blocks": 1, "reason": "技术对比必须有代码示例支撑"},
+    "全景架构型": {"min_blocks": 3, "reason": "全景架构在瓶颈层拆解和案例闭环处必须配代码/配置"},
+    "原理演进型": {"min_blocks": 0, "reason": "原理演进可无代码，但建议配数据/架构图"},
+}
+
+def scan_code_block_count(text, framework):
+    """Check minimum code block count based on framework type."""
+    blocks = re.findall(r'```[\s\S]*?```', text)
+    count = len(blocks)
+    req = CODE_REQUIREMENTS.get(framework, {"min_blocks": 0, "reason": ""})
+    hits = []
+    if count < req["min_blocks"]:
+        hits.append({
+            "rule": "code_block_count",
+            "found": count,
+            "required": req["min_blocks"],
+            "warning": f"当前 {count} 个代码块，{framework} 要求至少 {req['min_blocks']} 个（{req['reason']}）",
+        })
+    return hits
+
+
+P0_QUADRANT_MARKERS = {
+    "concept": [
+        (r"(?:是|本质|定义|指的是|核心[概含]念)一个.{2,30}(?:的)?[技术机制系统概念功能]", "是什么（概念定义）"),
+        (r"[技术机制系统概念功能].{2,20}(?:是|指|本质|核心)", "是什么（概念定义）"),
+    ],
+    "motivation": [
+        (r"(?:为什么|之所以|因为|为了解决|核心矛盾|冲突|问题在于|瓶颈)", "为什么（动机与取舍）"),
+        (r"(?:不够|撑不住|失效|瓶颈|痛点|不足|局限)", "为什么（动机与取舍）"),
+    ],
+    "context": [
+        (r"(?:场景|当需要|适用|不适用|选|替代|取舍)", "何时用（场景与边界）"),
+        (r"(?:如果|当.{2,10}时|在.{2,20}场景|推荐)", "何时用（场景与边界）"),
+    ],
+    "practice": [
+        (r"```[\s\S]*?```", "怎么用（代码/命令/操作）"),
+        (r"(?:运行|安装|配置|部署|验证|执行|调用|设置|步骤\s*\d)", "怎么用（代码/命令/操作）"),
+        (r"(?:实测|测试环境|环境:|预期输出|运行命令)", "怎么用（代码/命令/操作）"),
+    ],
+}
+
+
+def scan_p0_quadrants(text):
+    """Scan whether P0-level concepts are covered across all four quadrants.
+
+    For tech articles, core concepts should have at least:
+      - 是什么 (concept definition)
+      - 为什么 (motivation/trade-off)
+      - 何时用 (context/boundary)
+      - 怎么用 (code/command/practice)
+    """
+    covered = {q: False for q in P0_QUADRANT_MARKERS}
+    quadrant_details = {}
+
+    for quadrant, patterns in P0_QUADRANT_MARKERS.items():
+        matches = []
+        for pattern, label in patterns:
+            for m in re.finditer(pattern, text):
+                matches.append({"pattern": pattern, "label": label, "context": text[max(0, m.start() - 15):m.end() + 15]})
+        if matches:
+            covered[quadrant] = True
+            quadrant_details[quadrant] = matches[:3]
+
+    hits = []
+    missing = [q for q, found in covered.items() if not found]
+    if missing:
+        hits.append({
+            "rule": "p0_quadrant_incomplete",
+            "missing": missing,
+            "total_quadrants": 4,
+            "covered": sum(1 for _, found in covered.items() if found),
+            "warning": f"P0 知识点缺少以下象限覆盖：{', '.join(missing)}。建议补充：是什么（概念定义）/为什么（动机与取舍）/何时用（场景与边界）/怎么用（代码/命令/操作）",
+            "quadrant_detail": {q: len(m) for q, m in quadrant_details.items()},
+        })
+    return hits
+
+
 def main():
     parser = argparse.ArgumentParser(description="L1 硬性规则扫描")
     parser.add_argument("article_path", nargs="?", help="文章文件路径")
     parser.add_argument("--json", action="store_true", help="JSON 输出")
     parser.add_argument("--mode", choices=["wechat", "tech"], default="wechat", help="扫描模式（默认 wechat）")
+    parser.add_argument("--framework", choices=list(CODE_REQUIREMENTS.keys()), default=None, help="技术框架类型，仅 tech 模式使用")
     args = parser.parse_args()
     
     if not args.article_path:
@@ -285,6 +369,8 @@ def main():
             "analogy_limitation": scan_analogy_limitation(clean_text),
             "acronym_first_use": scan_acronym_first_use(clean_text),
             "unit_missing": scan_unit_missing(clean_text),
+            "code_block_count": scan_code_block_count(text, args.framework or "原理演进型"),
+            "p0_quadrant": scan_p0_quadrants(clean_text),
         }
         # Also run original wechat scans in tech mode (subset)
         results["forbidden_words"] = scan_forbidden_words(clean_text)
