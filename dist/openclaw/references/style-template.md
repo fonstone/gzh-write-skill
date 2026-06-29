@@ -58,3 +58,7 @@ author: "署名"
 | minimal-gold | 极简金（金色细线点缀，奢华但克制） |
 | focus-red | 聚焦红（中国红标题，适合新闻/评论） |
 | github | GitHub 风（蓝色链接，等宽代码块，开发者友好） |
+| tech-pro | 极简专业（深海军蓝单色强调，代码块优先，适合深度技术内容） |
+| stripe | Stripe Docs 风（冷静蓝紫强调，有序步骤感，适合教程/文档） |
+| linear | Linear Changelog 深色风（版本更新/路线图类） |
+| wired | WIRED 视觉风（黄+青+黑色块，适合 AI 观点/产品发布） |
