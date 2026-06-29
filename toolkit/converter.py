@@ -29,12 +29,33 @@ class ConvertResult:
 class WeChatConverter:
     """Convert Markdown to WeChat-compatible inline-style HTML."""
 
-    def __init__(self, theme: Optional[Theme] = None, theme_name: str = "professional-clean"):
+    # tech-enhance inline-code category styles. Applied only when
+    # tech_enhance=True to add subtle differentiation of register /
+    # function / identifier tokens in technical articles. Default color
+    # values fall back to theme.colors when available.
+    _TECH_CODE_CATEGORIES = {
+        # x86 / ARM / RISC-V register patterns: %rbp, %rax, x0, flag.Z etc.
+        "register": r"(^%[a-z0-9]+$|^[rxe][0-9a-z]+$|^[a-z]+\\.[a-z]+$|^\\$[a-z0-9_]+$)",
+        # function / syscall name ending with ( or () — pure identifier hooks
+        "function": r"^[a-zA-Z_][a-zA-Z0-9_]*\\(\\)?$",
+        # hex / binary literal
+        "number":   r"^(0x[0-9a-fA-F]+|0b[01]+|\\d+[dh]?$)",
+        # kebab / snake env / config key (PATH, DB_HOST, -O2)
+        "param":    r"^(--?[a-zA-Z-]+|[A-Z][A-Z0-9_]{2,}|[a-z][a-z0-9_]*=[^\\s]+)$",
+    }
+
+    def __init__(
+        self,
+        theme: Optional[Theme] = None,
+        theme_name: str = "professional-clean",
+        tech_enhance: bool = False,
+    ):
         if theme is not None:
             self._theme = theme
         else:
             self._theme = load_theme(theme_name)
         self._css_rules = get_inline_css_rules(self._theme)
+        self._tech_enhance = tech_enhance
 
     def convert(self, markdown_text: str) -> ConvertResult:
         """
@@ -78,6 +99,11 @@ class WeChatConverter:
 
         # Apply WeChat compatibility fixes
         html = self._apply_wechat_fixes(html)
+
+        # tech-enhance: classify inline <code> tokens (register/fn/param/number)
+        if self._tech_enhance:
+            html = self._enhance_inline_code_categories(html)
+            html = self._enhance_param_tables(html)
 
         # Inject dark mode attributes
         html = self._inject_darkmode(html)
@@ -219,7 +245,89 @@ class WeChatConverter:
 
         return str(soup)
 
-    # -- CJK compatibility fixes --
+    # -- tech-enhance inline code / param tables --
+
+    def _enhance_inline_code_categories(self, html: str) -> str:
+        """Color-classify inline <code> tokens for tech articles.
+
+        Adds a distinguishing color for register, function, number,
+        env/param tokens when the inner text matches a known pattern.
+        The base <code> style is preserved; only `color` is overridden
+        per category. Used only in tech mode to reduce visual monotony
+        without resorting to syntax-highlight libraries.
+        """
+        import re as _re
+
+        colors = self._theme.colors
+        cat_colors = {
+            "register": colors.get("code_reg", "#b45309"),
+            "function": colors.get("code_fn",  "#0891b2"),
+            "number":   colors.get("code_color", "#0f3a6e"),
+            "param":    colors.get("code_param", "#6d28d9"),
+        }
+
+        compiled = {cat: _re.compile(pat) for cat, pat in self._TECH_CODE_CATEGORIES.items()}
+
+        soup = BeautifulSoup(html, "html.parser")
+        for code in soup.find_all("code"):
+            # Skip inline <code> inside <pre> — those are block code
+            if code.parent and code.parent.name == "pre":
+                continue
+            text = code.get_text().strip()
+            if not text or " " in text:
+                continue
+            for cat, rx in compiled.items():
+                if rx.match(text):
+                    existing = code.get("style", "")
+                    if "color:" in existing or "color :" in existing:
+                        # override existing color
+                        existing = _re.sub(r"color\s*:\s*[^;]+;?", "", existing)
+                    code["style"] = f"{existing}; color: {cat_colors[cat]}".strip("; ")
+                    break
+        return str(soup)
+
+    def _enhance_param_tables(self, html: str) -> str:
+        """Mark parameter tables so the theme can style them distinctly.
+
+        Detects tables whose header row matches common parameter table
+        signatures (参数 / Parameter / Flag / 选项 / Field / 字段 / Name /
+        类型 / Type / Default / 默认值). Adds `data-tablekind="params"`
+        to the <table> and a class-style data attribute so the theme's
+        CSS (tech-pro.yaml) can give the first column monospace + accent
+        color without changing default table CSS for every theme.
+        """
+        import re as _re
+
+        param_header_keywords = {
+            "参数", "parameter", "param", "flag", "选项", "option",
+            "字段", "field", "name", "类型", "type", "默认值", "default",
+            "含义", "description", "说明", "寄存器", "register",
+        }
+
+        soup = BeautifulSoup(html, "html.parser")
+        for table in soup.find_all("table"):
+            ths = table.find_all("th")
+            if not ths:
+                continue
+            header_texts = {th.get_text().strip().lower() for th in ths}
+            if any(kw in header_texts for kw in param_header_keywords):
+                table["data-tablekind"] = "params"
+                # Ensure first column cells get monospace + accent in tech mode
+                for row in table.find_all("tr"):
+                    cells = row.find_all("td")
+                    if cells:
+                        first = cells[0]
+                        existing = first.get("style", "")
+                        if "font-family" not in existing:
+                            first["style"] = (
+                                existing +
+                                ("; " if existing else "") +
+                                "font-family: 'SFMono-Regular', Consolas, "
+                                "'Liberation Mono', Menlo, Courier, monospace; "
+                                "font-size: 13px; color: #0f3a6e; "
+                                "white-space: nowrap; font-weight: 600"
+                            ).strip("; ")
+        return str(soup)
 
     def _fix_cjk_spacing(self, text: str) -> str:
         """Auto-insert thin space between CJK and Latin/digit characters.

@@ -54,6 +54,23 @@ BANNED_WORDS = [
     # 机械冗长
     "进行讨论", "进行总结", "做出贡献", "产生影响", "实现功能",
     "开展研究", "发挥作用", "做出改变",
+    # Humanizer-zh 新增禁用词
+    # 最高级与里程碑式
+    "具有里程碑意义", "开创性的", "划时代的", "突破性的", "奠定了",
+    "重塑格局", "改写规则", "颠覆行业", "黄金时代",
+    # 媒体引述无来源
+    "被广泛报道", "受到广泛关注", "引发热议",
+    # 协作/助手式语言
+    "当然可以", "请随时告诉我", "如有任何问题", "如有任何调整",
+    "很高兴为您", "这个想法很有启发性",
+    # 知识截止日期
+    "我的知识截止于", "我的训练数据截止于",
+    # 过度礼貌/谦虚
+    "让我茅塞顿开", "深感荣幸",
+    # 挑战与未来展望框架
+    "任重道远", "放眼未来", "挑战与机遇并存",
+    # 从X到Y抽象范围
+    "贯穿始终",
 ]
 
 REAL_SOURCE_PATTERNS = [
@@ -425,6 +442,49 @@ TIER1_CHECKS = [
     ("adverb_density", score_adverb_density),
 ]
 
+# ── Humanizer-zh 补充检查项 ──
+
+SUPERLATIVE_MARKERS = [
+    "具有里程碑意义", "开创性的", "划时代的", "突破性的", "前所未有的",
+    "奠定了", "重塑格局", "改写规则", "颠覆行业", "黄金时代",
+    "证明", "见证", "标志", "象征",
+]
+
+COLLABORATIVE_MARKERS = [
+    "当然可以", "请随时告诉我", "如有任何问题", "如有任何调整",
+    "很高兴为您", "这个想法很有启发性", "让我逐一分析",
+    "如果您需要调整", "希望这个回答对你有帮助",
+]
+
+SCOPE_MARKERS = [
+    r"从[^，。]{2,20}到[^，。]{2,20}(?:的跨越|的过渡|的演进|的变革|的历程|的蜕变)",
+    r"横跨[^，。]{4,30}与[^，。]{4,10}",
+]
+
+
+def score_superlative_density(text):
+    """Humanizer-zh: 最高级与里程碑式拔高密度"""
+    count = sum(text.count(m) for m in SUPERLATIVE_MARKERS)
+    score = max(0.0, 1.0 - count * 0.15)
+    return _make_result(score, f"{count} superlative markers (target 0)", None)
+
+
+def score_collaborative_tone(text):
+    """Humanizer-zh: 协作/助手式语言检测"""
+    count = sum(text.count(m) for m in COLLABORATIVE_MARKERS)
+    score = max(0.0, 1.0 - count * 0.25)
+    return _make_result(score, f"{count} collaborative phrases (target 0)", None)
+
+
+def score_abstract_scope(text):
+    """Humanizer-zh: 从X到Y抽象范围检测"""
+    count = 0
+    for pattern in SCOPE_MARKERS:
+        count += len(re.findall(pattern, text))
+    score = max(0.0, 1.0 - count * 0.3)
+    return _make_result(score, f"{count} abstract scope structures (target 0)", None)
+
+
 TIER2_CHECKS = [
     ("banned_words", score_banned_words),
     ("broken_sentences", score_broken_sentences),
@@ -433,6 +493,10 @@ TIER2_CHECKS = [
     ("self_correction", score_self_correction),
     ("translation_tone", score_translation_tone),
     ("sentence_pattern_repeat", score_sentence_pattern_repeat),
+    # Humanizer-zh 补充检查
+    ("superlative_density", score_superlative_density),
+    ("collaborative_tone", score_collaborative_tone),
+    ("abstract_scope", score_abstract_scope),
 ]
 
 
@@ -465,6 +529,10 @@ _BELL_CURVE_CHECKS = {
     "sentence_length_range": 0.71,
     "paragraph_length_variance": 0.52,
     "banned_words": 0.73,
+    # Humanizer-zh 新增校准基准（人工检测应为0）
+    "superlative_density": 0.95,
+    "collaborative_tone": 0.98,
+    "abstract_scope": 0.95,
 }
 
 

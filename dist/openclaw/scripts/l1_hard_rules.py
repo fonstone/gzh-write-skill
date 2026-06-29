@@ -81,6 +81,48 @@ FORBIDDEN_WORDS = [
     ("这背后是一个更深层的问题", "[删掉宣告]"),
     ("如果我们把视角拉远", "[删掉宣告]"),
     ("把镜头拉近来看", "[删掉宣告]"),
+    # ── Humanizer-zh 新增禁用词 ──
+    # 最高级与里程碑式拔高 [ai-patterns 1.8]
+    ("具有里程碑意义", "[具体化]"),
+    ("开创性的", "[具体化]"),
+    ("划时代的", "[具体化]"),
+    ("突破性的", "[具体化]"),
+    ("前所未有的", "[具体化]"),
+    ("奠定了", "[具体化]"),
+    ("重塑格局", "[具体化]"),
+    ("改写规则", "[具体化]"),
+    ("颠覆行业", "[具体化]"),
+    ("黄金时代", "[具体化]"),
+    # 媒体引述无来源 [ai-patterns 1.9]
+    ("被广泛报道", "[指名道姓具体媒体]"),
+    ("引发广泛关注", "[具体数据或事件]"),
+    ("引发热议", "[具体说明]"),
+    ("受到普遍关注", "[具体说明]"),
+    ("受到广泛关注", "[具体说明]"),
+    # 协助/助手式语言 [ai-patterns 1.11]
+    ("当然可以", "[删掉]"),
+    ("请随时告诉我", "[删掉]"),
+    ("如有任何问题", "[删掉]"),
+    ("如有任何调整", "[删掉]"),
+    ("很高兴为您", "[删掉]"),
+    ("这个想法很有启发性", "[删掉]"),
+    # 知识截止日期 [ai-patterns 1.12]
+    ("我的知识截止于", "[删掉]"),
+    ("我的训练数据截止于", "[删掉]"),
+    # 过度礼貌/谦虚 [ai-patterns 1.13]
+    ("让我茅塞顿开", "[删掉]"),
+    ("深感荣幸", "[删掉]"),
+    ("非常荣幸", "[删掉]"),
+    ("向您致以崇高的敬意", "[删掉]"),
+    # 挑战与未来展望框架 [ai-patterns 1.10]
+    ("任重道远", "[具体化]"),
+    ("前进的道路", "[具体化]"),
+    ("放眼未来", "[删掉]"),
+    ("放眼长远", "[删掉]"),
+    ("挑战与机遇并存", "[删掉]"),
+    # "从X到Y"抽象范围 [ai-patterns 1.12]
+    ("贯穿始终", "[缩小范围]"),
+    ("横跨", "[缩窄]"),
 ]
 
 FORBIDDEN_PUNCT = [
@@ -98,6 +140,14 @@ STRUCTURAL_CLICHES = [
     r"首先[，,].*其次[，,].*最后",
     r"值得注意的是",
     r"不难发现",
+    # 挑战与未来展望固定框架 [ai-patterns 1.10]
+    r"尽管[^，。]{4,30}挑战[，,][^，。]{4,30}展望",
+    r"放眼未来[，,][^。]{4,40}将[在会]",
+    r"虽然[^，。]{4,30}但[^，。]{4,30}任重道远",
+    r"未来[，,][^，。]{4,40}(?:发展方向|前进的道路)",
+    # 从X到Y抽象范围 [ai-patterns 1.12]
+    r"从[^，。]{2,20}到[^，。]{2,20}(?:的跨越|的过渡|的演进|的变革|的历程)",
+    r"横跨[^，。]{4,30}与[^，。]{4,10}",
 ]
 
 GENERIC_TOOL_PATTERNS = [
@@ -107,6 +157,44 @@ GENERIC_TOOL_PATTERNS = [
     r"大模型(?![\u4e00-\u9fff])",
     r"人工智能技术",
 ]
+
+# ── Humanizer-zh 新增扫描 ──
+
+# 最高级与里程碑式拔高 [ai-patterns 1.8]
+SUPERLATIVE_PATTERNS = [
+    (r"(?:具有|有着|作为).{0,6}(?:里程碑|分水岭|转折点)", "里程碑式拔高，替换为具体事实"),
+    (r"奠定了.{0,12}(?:基础|基石)", "奠定了XX基础 → 改为具体实现"),
+    (r"(?:划时代|开创性|突破性|前所未有)的.{1,15}(?:意义|贡献|突破|创新|技术|产品|方案)", "最高级修饰，替换为具体描述"),
+    (r"(?:重塑|改写|颠覆).{0,12}(?:格局|规则|行业|生态)", "夸大表述，替换为具体变化"),
+    (r"作为.{0,8}(?:证明|见证|标志|象征)", "作为XX的证明 → 删掉，直接说事实"),
+]
+
+# 知识截止日期泄露 [ai-patterns 1.12]
+KNOWLEDGE_CUTOFF_PATTERNS = [
+    (r"截至.{0,12}(?:年|月)[^，。]{0,20}(?:尚未|没有|缺乏|未)", "知识截止日期泄露，删掉或替换为具体来源"),
+    (r"在公开资料中[^，。]{0,15}(?:有限|不足|缺失|缺乏)", "训练数据限制措辞，删掉"),
+    (r"目前[^，。]{0,10}(?:尚未有|缺乏|没有)[^，。]{0,10}(?:系统性|完整|全面)", "训练数据限制措辞，替换为有来源的表述"),
+    (r"需要注意的是.{0,20}(?:截止|截至|训练数据|知识)", "AI训练数据限制泄露，删掉"),
+]
+
+# 同义词循环检测 [ai-patterns 2.5]
+SYNONYM_CYCLING_PATTERNS = [
+    # 一个段落内同一主语换多种称谓
+    (r"这位.{2,8}[^。]{6,30}(?:这位|该|此)[^，。]{2,8}(?:[，,])(?:他|她|它).{4,30}(?:这位|该|此)", "同义词循环：同一主体在相邻句中换不同称呼"),
+]
+
+# 是字判断句/作为结构过度 [ai-patterns 1.14]
+COPULA_OVERUSE_PATTERNS = [
+    (r"作为.{2,20}(?:，|,)(?:它|其|该|这)", "作为结构过度，拆为两个短句"),
+    (r"是一[项个种套].{2,20}(?:的)?(?:关键|核心|基础|基石|根本)", "是字判断句，改为具体描述"),
+    (r"是.{2,12}最[^，。]{2,15}(?:之一|的)", "最高级判断句，改为具体陈述"),
+]
+
+# Emoji滥用 [ai-patterns 1.15]
+EMOJI_PATTERNS = [
+    (r"[\U0001F300-\U0001FAFF\u2600-\u27BF\uFE00-\uFE0F]", "Emoji 滥用，删除正文中的 emoji"),
+]
+
 
 # L1-5 假设性例子模式（AI 编造场景的标志）
 HYPOTHETICAL_EXAMPLES = [
@@ -173,6 +261,50 @@ def scan_ai_boundary(text):
         for m in re.finditer(pattern, text):
             hits.append({"pattern": pattern, "position": m.start(), "warning": "此段可能为 AI 编造的个人经历，建议标注编辑锚点或替换为真实经历", "context": text[max(0,m.start()-20):m.end()+40]})
     return hits
+
+# ── Humanizer-zh 新增扫描函数 ──
+
+def scan_superlatives(text):
+    """最高级与里程碑式拔高扫描 [ai-patterns 1.8]"""
+    hits = []
+    for pattern, msg in SUPERLATIVE_PATTERNS:
+        for m in re.finditer(pattern, text):
+            hits.append({"rule": "superlative", "position": m.start(), "warning": msg, "context": text[max(0,m.start()-20):m.end()+30]})
+    return hits
+
+def scan_knowledge_cutoff(text):
+    """知识截止日期泄露扫描 [ai-patterns 1.12]"""
+    hits = []
+    for pattern, msg in KNOWLEDGE_CUTOFF_PATTERNS:
+        for m in re.finditer(pattern, text):
+            hits.append({"rule": "knowledge_cutoff", "position": m.start(), "warning": msg, "context": text[max(0,m.start()-20):m.end()+30]})
+    return hits
+
+def scan_synonym_cycling(text):
+    """同义词循环检测 [ai-patterns 2.5]"""
+    hits = []
+    for pattern, msg in SYNONYM_CYCLING_PATTERNS:
+        for m in re.finditer(pattern, text):
+            hits.append({"rule": "synonym_cycling", "position": m.start(), "warning": msg, "context": text[max(0,m.start()-20):m.end()+40]})
+    return hits
+
+def scan_copula_overuse(text):
+    """是字判断句/作为结构过度扫描 [ai-patterns 1.14]"""
+    hits = []
+    for pattern, msg in COPULA_OVERUSE_PATTERNS:
+        for m in re.finditer(pattern, text):
+            hits.append({"rule": "copula_overuse", "position": m.start(), "warning": msg, "context": text[max(0,m.start()-20):m.end()+30]})
+    return hits
+
+def scan_emoji_abuse(text):
+    """Emoji 滥用扫描 [ai-patterns 1.15]"""
+    hits = []
+    for pattern, msg in EMOJI_PATTERNS:
+        for m in re.finditer(pattern, text):
+            hits.append({"rule": "emoji_abuse", "position": m.start(), "warning": msg, "context": text[max(0,m.start()-5):m.end()+5]})
+    return hits
+
+
 
 # ── Tech mode scan functions ──
 
@@ -363,6 +495,15 @@ def main():
     text = path.read_text(encoding='utf-8')
     clean_text = strip_code_blocks(text)
     
+    # Humanizer-zh 新增扫描（通用，wechat + tech 都跑）
+    humanizer_scans = {
+        "superlatives": scan_superlatives(clean_text),
+        "knowledge_cutoff": scan_knowledge_cutoff(clean_text),
+        "synonym_cycling": scan_synonym_cycling(clean_text),
+        "copula_overuse": scan_copula_overuse(clean_text),
+        "emoji_abuse": scan_emoji_abuse(clean_text),
+    }
+
     if args.mode == "tech":
         results = {
             "fabricated_data": scan_fabricated_data(clean_text),
@@ -372,8 +513,8 @@ def main():
             "code_block_count": scan_code_block_count(text, args.framework or "原理演进型"),
             "p0_quadrant": scan_p0_quadrants(clean_text),
         }
-        # Also run original wechat scans in tech mode (subset)
         results["forbidden_words"] = scan_forbidden_words(clean_text)
+        results.update(humanizer_scans)
     else:
         results = {
             "forbidden_words": scan_forbidden_words(clean_text),
@@ -383,6 +524,7 @@ def main():
             "hypothetical_examples": scan_hypothetical_examples(clean_text),
             "ai_boundary_warnings": scan_ai_boundary(clean_text),
         }
+        results.update(humanizer_scans)
     
     total_hits = sum(len(v) for v in results.values())
     results["summary"] = {

@@ -35,3 +35,9 @@ core_principles:
   - "共鸣增强：每个核心知识点配套1个开发者常见踩坑点，用真实体感替代抽象描述"
 
 word_count: "2500-4000"
+
+# 排版主题（技术类文章强制使用科技/极简专业类主题，避免花哨样式干扰）
+# 默认 tech-pro：深海军蓝单色强调、无渐变无装饰，代码块为主角
+# 备选：stripe（教程/操作指南）、github（开源/工具说明）、minimal（方法论）、linear（changelog）
+# 禁用：wired（视觉过强）、tech-modern（渐变装饰过多）、其他花哨主题
+theme: "tech-pro"

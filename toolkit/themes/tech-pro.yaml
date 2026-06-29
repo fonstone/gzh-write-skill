@@ -1,0 +1,216 @@
+name: "tech-pro"
+description: "极简专业科技风：深海军蓝主色、单色强调、无渐变无装饰。代码块为主角，参数表格首列等宽对齐，inline 行内函数/标识符识别 accent 强调。专为深度技术内容设计——操作系统/编译器/嵌入式/分布式原理与源码拆解，避免任何花哨样式干扰技术信息传递。"
+colors:
+  primary: "#0f3a6e"
+  secondary: "#0891b2"
+  text: "#1f2937"
+  text_light: "#475569"
+  background: "#ffffff"
+  code_bg: "#f8fafc"
+  code_color: "#0f3a6e"
+  code_fn: "#0891b2"
+  code_reg: "#b45309"
+  code_param: "#6d28d9"
+  quote_border: "#0f3a6e"
+  quote_bg: "#f1f5f9"
+  border_radius: "4px"
+  darkmode:
+    background: "#0f172a"
+    text: "#cbd5e1"
+    text_light: "#94a3b8"
+    primary: "#60a5fa"
+    secondary: "#22d3ee"
+    code_bg: "#1e293b"
+    code_color: "#60a5fa"
+    code_fn: "#22d3ee"
+    code_reg: "#fbbf24"
+    code_param: "#a78bfa"
+    quote_bg: "#1e293b"
+    quote_border: "#3b82f6"
+base_css: |
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    font-size: 16px;
+    line-height: 1.78;
+    color: #1f2937;
+    background: #ffffff;
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 24px 22px;
+    word-wrap: break-word;
+  }
+  h1 {
+    font-size: 25px;
+    font-weight: 800;
+    color: #0f172a;
+    margin: 36px 0 20px 0;
+    padding-bottom: 12px;
+    border-bottom: 2px solid #0f3a6e;
+    line-height: 1.32;
+    text-align: left;
+  }
+  h2 {
+    font-size: 20px;
+    font-weight: 780;
+    color: #0f172a;
+    margin: 44px 0 14px 0;
+    padding: 8px 0;
+    border-top: 1px solid #e2e8f0;
+    line-height: 1.42;
+  }
+  h2::before {
+    content: "";
+    display: inline-block;
+    width: 6px;
+    height: 18px;
+    background: #0f3a6e;
+    margin-right: 10px;
+    vertical-align: -2px;
+  }
+  h3 {
+    font-size: 17px;
+    font-weight: 720;
+    color: #0f172a;
+    margin: 28px 0 10px 0;
+    padding-left: 10px;
+    border-left: 3px solid #0f3a6e;
+    line-height: 1.5;
+  }
+  h4 {
+    font-size: 15px;
+    font-weight: 700;
+    color: #334155;
+    margin: 20px 0 10px 0;
+    line-height: 1.5;
+  }
+  p {
+    font-size: 16px;
+    line-height: 1.78;
+    color: #1f2937;
+    margin: 12px 0;
+  }
+  strong {
+    font-weight: 750;
+    color: #0f3a6e;
+  }
+  em {
+    font-style: italic;
+    color: #1f2937;
+  }
+  code {
+    font-family: "SFMono-Regular", ui-monospace, Consolas, "Liberation Mono", Menlo, Courier, monospace;
+    font-size: 13.6px;
+    background: #f1f5f9;
+    color: #0f3a6e;
+    padding: 1px 6px;
+    border-radius: 3px;
+    border: 1px solid #e2e8f0;
+  }
+  pre {
+    background: #0f172a;
+    color: #e2e8f0;
+    padding: 16px 18px;
+    border-radius: 4px;
+    overflow-x: auto;
+    margin: 20px 0;
+    line-height: 1.6;
+    border: 1px solid #1e293b;
+  }
+  pre code {
+    font-family: "SFMono-Regular", ui-monospace, Consolas, "Liberation Mono", Menlo, Courier, monospace;
+    font-size: 13.6px;
+    background: none;
+    color: #e2e8f0;
+    padding: 0;
+    border-radius: 0;
+    border: 0;
+  }
+  blockquote {
+    border-left: 3px solid #0f3a6e;
+    background: #f1f5f9;
+    margin: 18px 0;
+    padding: 12px 16px;
+    border-radius: 0 4px 4px 0;
+    color: #475569;
+  }
+  blockquote p {
+    margin: 8px 0;
+    color: #475569;
+  }
+  ul {
+    padding-left: 22px;
+    margin: 12px 0;
+    list-style-type: disc;
+  }
+  ol {
+    padding-left: 22px;
+    margin: 12px 0;
+  }
+  li {
+    font-size: 16px;
+    line-height: 1.78;
+    color: #1f2937;
+    margin: 6px 0;
+  }
+  li::marker {
+    color: #0f3a6e;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 20px 0;
+    font-size: 14.5px;
+  }
+  thead {
+    background: #0f3a6e;
+  }
+  th {
+    background: #0f3a6e;
+    color: #ffffff;
+    font-weight: 720;
+    padding: 10px 12px;
+    text-align: left;
+    border: 1px solid #0f3a6e;
+    font-size: 14px;
+    letter-spacing: 0.02em;
+  }
+  td {
+    padding: 9px 12px;
+    border: 1px solid #e2e8f0;
+    color: #1f2937;
+    vertical-align: top;
+  }
+  td:first-child {
+    font-family: "SFMono-Regular", ui-monospace, Consolas, "Liberation Mono", Menlo, Courier, monospace;
+    font-size: 13px;
+    color: #0f3a6e;
+    white-space: nowrap;
+    font-weight: 600;
+  }
+  td:nth-child(2) {
+    font-family: "SFMono-Regular", ui-monospace, Consolas, "Liberation Mono", Menlo, Courier, monospace;
+    font-size: 13px;
+    color: #0891b2;
+  }
+  tr:nth-child(even) {
+    background: #f8fafc;
+  }
+  img {
+    max-width: 100%;
+    height: auto;
+    display: block;
+    margin: 24px auto;
+    border-radius: 4px;
+  }
+  a {
+    color: #0f3a6e;
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 2px;
+    font-weight: 500;
+  }
+  hr {
+    border: none;
+    border-top: 1px solid #e2e8f0;
+    margin: 32px 0;
+  }

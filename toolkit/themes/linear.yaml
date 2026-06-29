@@ -1,0 +1,191 @@
+name: "linear"
+description: "Linear Changelog 风格：深色背景、紫色强调、◆ 小节标记，适合版本更新/路线图/changelog 类技术内容。"
+colors:
+  primary: "#8b5cf6"
+  secondary: "#c4b5fd"
+  text: "#d7d7e1"
+  text_light: "#c4b5fd"
+  background: "#111114"
+  code_bg: "#242432"
+  code_color: "#c4b5fd"
+  code_fn: "#8b5cf6"
+  quote_border: "#2b2b33"
+  quote_bg: "#19191f"
+  border_radius: "6px"
+  darkmode:
+    background: "#111114"
+    text: "#d7d7e1"
+    text_light: "#c4b5fd"
+    primary: "#8b5cf6"
+    code_bg: "#242432"
+    code_color: "#c4b5fd"
+    quote_bg: "#19191f"
+    quote_border: "#2b2b33"
+base_css: |
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    font-size: 16px;
+    line-height: 1.76;
+    color: #d7d7e1;
+    background: #111114;
+    max-width: 750px;
+    margin: 0 auto;
+    padding: 24px 22px;
+    word-wrap: break-word;
+  }
+  h1 {
+    font-size: 25px;
+    font-weight: 850;
+    color: #ffffff;
+    margin: 36px 0 24px 0;
+    line-height: 1.32;
+    text-align: left;
+  }
+  h2 {
+    font-size: 19px;
+    font-weight: 820;
+    color: #ffffff;
+    margin: 40px 0 14px 0;
+    padding: 10px 0;
+    border-bottom: 1px solid #2b2b33;
+    line-height: 1.45;
+  }
+  h2::before {
+    content: "◆ ";
+    color: #8b5cf6;
+  }
+  h3 {
+    font-size: 17px;
+    font-weight: 780;
+    color: #c4b5fd;
+    margin: 30px 0 10px 0;
+    line-height: 1.5;
+  }
+  h4 {
+    font-size: 16px;
+    font-weight: 760;
+    color: #c4b5fd;
+    margin: 22px 0 10px 0;
+    line-height: 1.5;
+  }
+  p {
+    font-size: 16px;
+    line-height: 1.76;
+    color: #d7d7e1;
+    margin: 12px 0;
+  }
+  strong {
+    font-weight: 850;
+    color: #ffffff;
+  }
+  em {
+    font-style: italic;
+    color: #d7d7e1;
+  }
+  code {
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
+    font-size: 14px;
+    background: #242432;
+    color: #c4b5fd;
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
+  pre {
+    background: #1a1a22;
+    color: #d7d7e1;
+    padding: 16px 18px;
+    border-radius: 6px;
+    overflow-x: auto;
+    margin: 18px 0;
+    line-height: 1.6;
+    border: 1px solid #2b2b33;
+  }
+  pre code {
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
+    font-size: 13.6px;
+    background: none;
+    color: #d7d7e1;
+    padding: 0;
+    border-radius: 0;
+  }
+  blockquote {
+    border: 1px solid #2b2b33;
+    border-left: 3px solid #8b5cf6;
+    background: #19191f;
+    margin: 20px 0;
+    padding: 14px 16px;
+    border-radius: 0 6px 6px 0;
+    color: #d7d7e1;
+  }
+  blockquote p {
+    margin: 8px 0;
+    color: #d7d7e1;
+  }
+  ul {
+    padding-left: 22px;
+    margin: 12px 0;
+    list-style-type: disc;
+  }
+  ol {
+    padding-left: 22px;
+    margin: 12px 0;
+  }
+  li {
+    font-size: 16px;
+    line-height: 1.76;
+    color: #d7d7e1;
+    margin: 8px 0;
+    padding-left: 4px;
+  }
+  li::marker {
+    color: #8b5cf6;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 18px 0;
+    font-size: 15px;
+  }
+  thead {
+    background: #1a1a22;
+  }
+  th {
+    background: #1a1a22;
+    color: #ffffff;
+    font-weight: 720;
+    padding: 10px 14px;
+    text-align: left;
+    border: 1px solid #2b2b33;
+    border-bottom: 2px solid #8b5cf6;
+  }
+  td {
+    padding: 10px 14px;
+    border: 1px solid #2b2b33;
+    color: #d7d7e1;
+  }
+  td:first-child {
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
+    font-size: 13.6px;
+    color: #c4b5fd;
+    white-space: nowrap;
+  }
+  tr:nth-child(even) {
+    background: #161620;
+  }
+  img {
+    max-width: 100%;
+    height: auto;
+    display: block;
+    margin: 24px auto;
+    border-radius: 6px;
+  }
+  a {
+    color: #8b5cf6;
+    text-decoration: none;
+    font-weight: 500;
+  }
+  hr {
+    border: none;
+    border-top: 1px solid #2b2b33;
+    margin: 32px 0;
+  }

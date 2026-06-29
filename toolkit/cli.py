@@ -41,7 +41,7 @@ def load_config() -> dict:
 def cmd_preview(args):
     """Generate HTML preview and open in browser."""
     theme = load_theme(args.theme)
-    converter = WeChatConverter(theme=theme)
+    converter = WeChatConverter(theme=theme, tech_enhance=args.tech)
     result = converter.convert_file(args.input)
 
     # Wrap in full HTML for browser preview
@@ -72,13 +72,14 @@ def cmd_publish(args):
     secret = args.secret or wechat_cfg.get("secret")
     theme_name = args.theme or cfg.get("theme", "professional-clean")
     author = args.author or wechat_cfg.get("author")
+    tech_enhance = args.tech or cfg.get("mode", "") == "tech"
 
     if not appid or not secret:
         print("Error: --appid and --secret required (or set in config.yaml)", file=sys.stderr)
         sys.exit(1)
 
     theme = load_theme(theme_name)
-    converter = WeChatConverter(theme=theme)
+    converter = WeChatConverter(theme=theme, tech_enhance=tech_enhance)
     result = converter.convert_file(args.input)
 
     print(f"Title: {result.title}")
@@ -378,6 +379,7 @@ def main():
     p_preview.add_argument("-t", "--theme", default="professional-clean", help="Theme name")
     p_preview.add_argument("-o", "--output", help="Output HTML file path")
     p_preview.add_argument("--no-open", action="store_true", help="Don't open browser")
+    p_preview.add_argument("--tech", action="store_true", help="Enable tech-enhance mode (register/fn/param coloring + param tables)")
 
     # publish
     p_publish = sub.add_parser("publish", help="Convert and publish as WeChat draft")
@@ -389,6 +391,7 @@ def main():
     p_publish.add_argument("--title", help="Override article title")
     p_publish.add_argument("--author", default=None, help="Article author")
     p_publish.add_argument("--digest", default=None, help="Override article digest (≤120 UTF-8 bytes)")
+    p_publish.add_argument("--tech", action="store_true", help="Enable tech-enhance mode (auto-on when config mode=tech)")
 
     # themes
     sub.add_parser("themes", help="List available themes")
