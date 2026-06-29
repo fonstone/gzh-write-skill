@@ -133,6 +133,12 @@ class DiagnosisResult:
     tech_reproducibility: dict = field(default_factory=dict)
     tech_domain_fit: dict = field(default_factory=dict)
 
+    # Phase 3 wechat 四维（仅 wechat 模式）
+    wechat_topic_value: dict = field(default_factory=dict)
+    wechat_increment: dict = field(default_factory=dict)
+    wechat_resonance: dict = field(default_factory=dict)
+    wechat_domain_fit: dict = field(default_factory=dict)
+
     verdict: str = ""  # "PASS" / "DISSOLVED" / "NEEDS_JUDGMENT"
     verdict_reason: str = ""
 
@@ -147,6 +153,10 @@ class DiagnosisResult:
             "phase3_tech_increment": self.tech_increment,
             "phase3_tech_reproducibility": self.tech_reproducibility,
             "phase3_tech_domain_fit": self.tech_domain_fit,
+            "phase3_wechat_topic_value": self.wechat_topic_value,
+            "phase3_wechat_increment": self.wechat_increment,
+            "phase3_wechat_resonance": self.wechat_resonance,
+            "phase3_wechat_domain_fit": self.wechat_domain_fit,
             "verdict": self.verdict,
             "verdict_reason": self.verdict_reason,
         }
@@ -303,6 +313,118 @@ def scan_tech_domain_fit(topic: str, topics: list[str] | None = None) -> dict:
     }
 
 
+# ---------- wechat 模式四维诊断 ----------
+
+# Phase 3 维度 1 选题价值 - 宏大叙事信号（无具体场景的抽象命题）
+GRAND_NARRATIVE_SIGNALS = [
+    "行业趋势", "未来展望", "发展前景", "宏观分析",
+    "行业分析", "市场洞察", "时代变革", "产业变革",
+    "改变世界", "颠覆行业", "重塑格局", "划时代",
+    "新纪元", "黄金时代", "风口", "蓝海",
+]
+
+# Phase 3 维度 1 选题价值 - 情绪化蹭热度信号
+EMOTION_ONLY_SIGNALS = [
+    "我也来说", "忍不住", "不吐不快", "真的绝了",
+    "太离谱了", "震惊体", "刷屏了",
+]
+
+
+def scan_wechat_topic_value(topic: str, topics: list[str] | None = None) -> dict:
+    """wechat 模式维度 1: 选题价值。"""
+    grand = [s for s in GRAND_NARRATIVE_SIGNALS if s in topic]
+    emotion = [s for s in EMOTION_ONLY_SIGNALS if s in topic]
+
+    # 检测是否有具体场景/人物/数据（正面信号）
+    concrete_signals = []
+    for pos in ["实测", "亲历", "我", "案例", "数据", "调研", "踩坑", "对比"]:
+        if pos in topic:
+            concrete_signals.append(pos)
+
+    passed = len(grand) == 0 and len(emotion) == 0
+    return {
+        "passed": passed,
+        "grand_narrative_signals": grand,
+        "emotion_only_signals": emotion,
+        "concrete_signals": concrete_signals,
+        "llm_check_needed": [
+            "选题是否对应读者真实场景中的真实需求？",
+            "是否避免了'我也来蹭一下'的情绪化蹭热度？",
+            "是否避免了'人人都写过'的老生常谈？",
+            "是否对应 target_audience 真实画像？",
+        ],
+        "hint": "选题含宏大叙事或情绪蹭热度信号，需具体化" if not passed else "",
+    }
+
+
+def scan_wechat_increment(topic: str) -> dict:
+    """wechat 模式维度 2: 信息增量。复用 tech 的饱和检测。"""
+    saturated = scan_info_increment(topic)
+    return {
+        "passed": saturated["passed"],
+        "saturated_patterns": saturated["saturated_patterns"],
+        "llm_check_needed": [
+            "是否有读者无法从官方文档/同类文章获得的信息？",
+            "是否有'只有做过的人才知道'的细节？",
+            "是否避免了'整理了一遍已有知识'？",
+            "是否有可独立截图转发的金句/洞察？",
+        ],
+        "hint": saturated["hint"],
+    }
+
+
+def scan_wechat_resonance(topic: str) -> dict:
+    """wechat 模式维度 3: 读者共鸣。"""
+    # 检测是否有可代入的场景信号
+    scenario_signals = []
+    for pos in ["场景", "故事", "经历", "案例", "对话", "老板", "朋友", "同事", "团队", "公司"]:
+        if pos in topic:
+            scenario_signals.append(pos)
+
+    # 检测抽象命题（负面信号）
+    abstract_signals = []
+    for neg in ["本质", "规律", "原则", "哲学", "底层逻辑", "核心"]:
+        if neg in topic and not scenario_signals:
+            abstract_signals.append(neg)
+
+    passed = len(abstract_signals) == 0 or len(scenario_signals) > 0
+    return {
+        "passed": passed,
+        "scenario_signals": scenario_signals,
+        "abstract_signals": abstract_signals,
+        "llm_check_needed": [
+            "选题是否戳中了 target_audience 的具体痛点？",
+            "选题是否有可代入的场景/人物/对话？",
+            "是否避免了'对所有人都重要但谁都不在乎'的陷阱？",
+            "是否有'对立面同理心'的空间？",
+        ],
+        "hint": "选题含抽象命题但无具体场景，共鸣度可能不足" if abstract_signals and not scenario_signals else "",
+    }
+
+
+def scan_wechat_domain_fit(topic: str, topics: list[str] | None = None) -> dict:
+    """wechat 模式维度 4: 领域适配度。"""
+    # 默认 wechat topics 来自 style.yaml，这里用通用 fallback
+    default_topics = [
+        "AI", "产品", "设计", "创业", "商业模式", "效率",
+        "科技", "互联网", "工具", "生活", "文化",
+    ]
+    check_topics = topics or default_topics
+    matched = [t for t in check_topics if t.lower() in topic.lower()]
+
+    return {
+        "passed": len(matched) > 0,
+        "matched_topics": matched,
+        "llm_check_needed": [
+            "选题是否在 style.yaml 的 topics 范围内？",
+            "选题难度是否匹配 target_audience？",
+            "选题是否匹配 content_style？",
+            "是否避免了'什么都说一点但什么都没说透'？",
+        ],
+        "hint": f"选题匹配 topics: {matched}" if matched else "选题未匹配任何 topics，可能偏离账号定位",
+    }
+
+
 # ---------- 主诊断流程 ----------
 
 def diagnose_topic(topic: str, mode: str = "tech", tech_topics: list[str] | None = None) -> DiagnosisResult:
@@ -335,6 +457,13 @@ def diagnose_topic(topic: str, mode: str = "tech", tech_topics: list[str] | None
         result.tech_reproducibility = scan_tech_reproducibility(topic)
         result.tech_domain_fit = scan_tech_domain_fit(topic, tech_topics)
 
+    # Phase 3 wechat 四维
+    if mode == "wechat":
+        result.wechat_topic_value = scan_wechat_topic_value(topic, tech_topics)
+        result.wechat_increment = scan_wechat_increment(topic)
+        result.wechat_resonance = scan_wechat_resonance(topic)
+        result.wechat_domain_fit = scan_wechat_domain_fit(topic, tech_topics)
+
     # 判定
     dissolved_reasons = []
 
@@ -355,6 +484,16 @@ def diagnose_topic(topic: str, mode: str = "tech", tech_topics: list[str] | None
             ("知识增量", result.tech_increment),
             ("实践可复现性", result.tech_reproducibility),
             ("领域适配度", result.tech_domain_fit),
+        ]:
+            if not dim_result["passed"]:
+                dissolved_reasons.append(f"Phase 3 {dim_name} 不通过：{dim_result.get('hint', '')}")
+
+    if mode == "wechat":
+        for dim_name, dim_result in [
+            ("选题价值", result.wechat_topic_value),
+            ("信息增量", result.wechat_increment),
+            ("读者共鸣", result.wechat_resonance),
+            ("领域适配度", result.wechat_domain_fit),
         ]:
             if not dim_result["passed"]:
                 dissolved_reasons.append(f"Phase 3 {dim_name} 不通过：{dim_result.get('hint', '')}")
@@ -408,6 +547,23 @@ def format_report(result: DiagnosisResult, mode: str) -> str:
                 ("知识增量", "tech_increment"),
                 ("实践可复现性", "tech_reproducibility"),
                 ("领域适配度", "tech_domain_fit"),
+            ]:
+                dim = getattr(result, dim_key)
+                status = "✅ 通过" if dim["passed"] else "❌ 不通过"
+                lines.append(f"  {dim_name}: {status}")
+                if dim.get("hint"):
+                    lines.append(f"    提示: {dim['hint']}")
+                if dim.get("llm_check_needed"):
+                    lines.append(f"    需 LLM 判断: {dim['llm_check_needed']}")
+            lines.append("")
+
+        if mode == "wechat":
+            lines.append("Phase 3 通用四维诊断:")
+            for dim_name, dim_key in [
+                ("选题价值", "wechat_topic_value"),
+                ("信息增量", "wechat_increment"),
+                ("读者共鸣", "wechat_resonance"),
+                ("领域适配度", "wechat_domain_fit"),
             ]:
                 dim = getattr(result, dim_key)
                 status = "✅ 通过" if dim["passed"] else "❌ 不通过"
