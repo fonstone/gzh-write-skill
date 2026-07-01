@@ -45,3 +45,11 @@
   source: 原点技术
   title: 同一块内存，连续两次memset，耗时相差4倍！
   archetype: 源码拆解型
+- category: tech-deep
+  subcategory: memory-mm
+  extracted_at: '2026-07-01'
+  file: tech-deep-002.md
+  humanness_score: 34.0
+  source: 深度Linux
+  title: 我将Linux页大小从4KB改为2MB，结果性能彻底翻车了！
+  archetype: 技术对比型
