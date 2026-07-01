@@ -1,0 +1,47 @@
+- category: tech-opinion
+  extracted_at: '2026-06-28'
+  file: tech-opinion-002.md
+  humanness_score: 34.54
+  source: 阿里云开发者
+- category: tech-opinion
+  extracted_at: '2026-06-28'
+  file: tech-opinion-003.md
+  humanness_score: 39.3
+  source: 阿里云开发者
+- category: tech-opinion
+  extracted_at: '2026-06-28'
+  file: tech-opinion-001.md
+  humanness_score: 47.44
+  source: 腾讯技术工程
+- category: tool-recommendation
+  subcategory: open-source-tool
+  extracted_at: '2026-07-01'
+  file: tool-recommendation-001.md
+  humanness_score: 42.0
+  source: 开源日记
+  title: 又一个国产神级 skill 夯爆了
+  archetype: 工具分享型
+- category: tool-recommendation
+  subcategory: open-source-tool
+  extracted_at: '2026-07-01'
+  file: tool-recommendation-002.md
+  humanness_score: 46.0
+  source: 歸藏的 AI 工具箱
+  title: 开源一个 PPT Skill｜压进了我 10 年的设计经验
+  archetype: 工具分享型
+- category: practical-methodology
+  subcategory: prompt-technique
+  extracted_at: '2026-07-01'
+  file: practical-methodology-001.md
+  humanness_score: 38.0
+  source: 数字生命卡兹克
+  title: 分享2个Vibe Coding必备的超实用Prompt
+  archetype: 方法论文享型
+- category: tech-deep
+  subcategory: memory-mm
+  extracted_at: '2026-07-01'
+  file: tech-deep-001.md
+  humanness_score: 36.0
+  source: 原点技术
+  title: 同一块内存，连续两次memset，耗时相差4倍！
+  archetype: 源码拆解型
