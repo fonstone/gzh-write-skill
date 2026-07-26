@@ -137,10 +137,10 @@ cd {skill_dir} && git fetch origin main --quiet 2>/dev/null
 **2.1 热点抓取**：
 
 ```bash
-python3 {skill_dir}/scripts/fetch_hotspots.py --limit 30
+python3 {skill_dir}/scripts/fetch_aihot.py --limit 30 --mode {mode}
 ```
 
-**降级**：脚本报错 → 用 `webfetch` 访问热搜站点（微博热搜、今日头条、百度热搜）抓取热点
+**降级**：脚本报错 → 用 `webfetch` 访问 aihot.virxact.com 页面抓取热点
 
 **2.2 历史分析 + SEO**：
 
