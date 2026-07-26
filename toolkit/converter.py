@@ -46,24 +46,24 @@ class WeChatConverter:
 
     _GITHUB_CODE_HIGHLIGHT = {
         "#008000": "#cf222e",
-        "#B00040": "#cf222e",
-        "#0000FF": "#8250df",
-        "#BA2121": "#0a3069",
+        "#b00040": "#cf222e",
+        "#0000ff": "#8250df",
+        "#ba2121": "#0a3069",
         "#408080": "#6e7781",
         "#000000": "#1f2328",
-        "#A00000": "#82071e",
-        "#00A000": "#116329",
+        "#a00000": "#82071e",
+        "#00a000": "#116329",
     }
 
     _GITHUB_CODE_HIGHLIGHT_DARK = {
         "#008000": "#ff7b72",
-        "#B00040": "#ff7b72",
-        "#0000FF": "#d2a8ff",
-        "#BA2121": "#a5d6ff",
+        "#b00040": "#ff7b72",
+        "#0000ff": "#d2a8ff",
+        "#ba2121": "#a5d6ff",
         "#408080": "#8b949e",
         "#000000": "#e6edf3",
-        "#A00000": "#ffdcd7",
-        "#00A000": "#aceabb",
+        "#a00000": "#ffdcd7",
+        "#00a000": "#aceabb",
     }
 
     def __init__(
@@ -104,9 +104,6 @@ class WeChatConverter:
         # Enhance code blocks (add data-lang attribute)
         html = self._enhance_code_blocks(html)
 
-        # Apply GitHub-like syntax highlighting colors
-        html = self._apply_github_code_highlight(html)
-
         # Process images (ensure responsive styling)
         html, images = self._process_images(html)
 
@@ -132,6 +129,9 @@ class WeChatConverter:
 
         # Inject dark mode attributes
         html = self._inject_darkmode(html)
+
+        # Apply GitHub-like syntax highlighting colors (after dark mode so data-darkmode-* attrs exist)
+        html = self._apply_github_code_highlight(html)
 
         # Generate digest from plain text
         digest = self._generate_digest(html)
@@ -200,7 +200,7 @@ class WeChatConverter:
 
     def _apply_github_code_highlight(self, html: str) -> str:
         soup = BeautifulSoup(html, "html.parser")
-        is_dark = bool(soup.find("[data-darkmode]"))
+        is_dark = bool(soup.find("pre", {"data-darkmode-bgcolor": True}))
         color_map = self._GITHUB_CODE_HIGHLIGHT_DARK if is_dark else self._GITHUB_CODE_HIGHLIGHT
 
         for code_block in soup.find_all("code"):
@@ -222,6 +222,8 @@ class WeChatConverter:
                             style,
                         )
                         span["style"] = new_style
+                        if is_dark:
+                            span["data-darkmode-color"] = gh_color
         return str(soup)
 
     def _process_images(self, html: str) -> tuple[str, list[str]]:
