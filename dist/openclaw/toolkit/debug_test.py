@@ -11,7 +11,6 @@ print('Has keyword span:', 'def' in r.html)
 print('Has cf222e:', '#cf222e' in r.html)
 print('Has 8250df (function):', '#8250df' in r.html)
 
-# Check raw HTML snippet
 idx = r.html.find('<pre')
 if idx >= 0:
     end = r.html.find('</pre>', idx)

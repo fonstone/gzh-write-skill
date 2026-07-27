@@ -1,7 +1,0 @@
-Task 1: complete (commits 8924579..81548dd, review clean)
-Task 2: complete (commits 81548dd..6a53077, review clean)
-Task 3: complete (commits 6a53077..904f4f3, review clean)
-Task 4: complete (commits 904f4f3..17df366, review clean after fix)
-Task 5: complete (commits 17df366..107d559, verified themes load OK)
-Task 6: complete (integration tests all pass)
-Task post-review fix: remove inner-loop import re (8257c0c)

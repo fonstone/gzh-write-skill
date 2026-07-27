@@ -44,6 +44,28 @@ class WeChatConverter:
         "param":    r"^(--?[a-zA-Z-]+|[A-Z][A-Z0-9_]{2,}|[a-z][a-z0-9_]*=[^\\s]+)$",
     }
 
+    _GITHUB_CODE_HIGHLIGHT = {
+        "#008000": "#cf222e",
+        "#b00040": "#cf222e",
+        "#0000ff": "#8250df",
+        "#ba2121": "#0a3069",
+        "#408080": "#6e7781",
+        "#000000": "#1f2328",
+        "#a00000": "#82071e",
+        "#00a000": "#116329",
+    }
+
+    _GITHUB_CODE_HIGHLIGHT_DARK = {
+        "#008000": "#ff7b72",
+        "#b00040": "#ff7b72",
+        "#0000ff": "#d2a8ff",
+        "#ba2121": "#a5d6ff",
+        "#408080": "#8b949e",
+        "#000000": "#e6edf3",
+        "#a00000": "#ffdcd7",
+        "#00a000": "#aceabb",
+    }
+
     def __init__(
         self,
         theme: Optional[Theme] = None,
@@ -108,6 +130,9 @@ class WeChatConverter:
         # Inject dark mode attributes
         html = self._inject_darkmode(html)
 
+        # Apply GitHub-like syntax highlighting colors (after dark mode so data-darkmode-* attrs exist)
+        html = self._apply_github_code_highlight(html)
+
         # Generate digest from plain text
         digest = self._generate_digest(html)
 
@@ -149,7 +174,7 @@ class WeChatConverter:
             "markdown.extensions.tables",
             "markdown.extensions.nl2br",
             "markdown.extensions.sane_lists",
-            "markdown.extensions.codehilite",
+            "codehilite",
         ]
         extension_configs = {
             "codehilite": {
@@ -171,6 +196,36 @@ class WeChatConverter:
                     if cls.startswith("language-"):
                         pre["data-lang"] = cls.replace("language-", "")
                         break
+        return str(soup)
+
+    def _apply_github_code_highlight(self, html: str) -> str:
+        soup = BeautifulSoup(html, "html.parser")
+        is_dark = bool(soup.find("pre", {"data-darkmode-bgcolor": True}))
+        color_map = self._GITHUB_CODE_HIGHLIGHT_DARK if is_dark else self._GITHUB_CODE_HIGHLIGHT
+
+        for code_block in soup.find_all("code"):
+            if code_block.parent and code_block.parent.name == "pre":
+                for span in code_block.find_all("span"):
+                    style = span.get("style", "")
+                    if "color:" not in style and "color :" not in style:
+                        continue
+                    m = re.search(r"color\s*:\s*([^;]+)", style)
+                    if not m:
+                        continue
+                    pyg_color = m.group(1).strip().lower()
+                    # Normalize 3-digit hex to 6-digit (#00f -> #0000ff)
+                    if re.match(r"^#[0-9a-f]{3}$", pyg_color):
+                        pyg_color = "#" + "".join(c * 2 for c in pyg_color[1:])
+                    gh_color = color_map.get(pyg_color)
+                    if gh_color:
+                        new_style = re.sub(
+                            r"color\s*:\s*[^;]+",
+                            f"color: {gh_color}",
+                            style,
+                        )
+                        span["style"] = new_style
+                        if is_dark:
+                            span["data-darkmode-color"] = gh_color
         return str(soup)
 
     def _process_images(self, html: str) -> tuple[str, list[str]]:

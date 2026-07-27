@@ -1,15 +1,3 @@
-### Task 1: Create `scripts/fetch_aihot.py`
-
-**Files:**
-- Create: `scripts/fetch_aihot.py`
-
-**Interfaces:**
-- Consumes: none
-- Produces: JSON to stdout with same schema as fetch_hotspots.py
-
-- [ ] **Step 1: Write the script**
-
-```python
 #!/usr/bin/env python3
 """
 Fetch AI industry hot topics from aihot.virxact.com API.
@@ -43,7 +31,6 @@ CATEGORY_LABELS = {
     "tip": "技巧与观点",
 }
 
-# mode-specific category weights
 MODE_WEIGHTS = {
     "wechat": {c: 1.0 for c in CATEGORY_LABELS},
     "tech": {
@@ -90,7 +77,6 @@ def fetch_aihot_items(limit: int = 30, mode: str = "wechat") -> list[dict]:
             except (ValueError, TypeError):
                 pass
 
-        # Heat score: time-decay, multiplied by category weight
         if hours_ago <= 24:
             heat = 10 * weight
         elif hours_ago <= 48:
@@ -141,10 +127,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-```
-
-- [ ] **Step 2: Verify the script runs without errors**
-
-Run: `python scripts/fetch_aihot.py --limit 3 --mode wechat`
-
-Expected: JSON output with items array containing at least 1 item (if API is accessible) or error message.
