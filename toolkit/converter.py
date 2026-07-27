@@ -209,14 +209,13 @@ class WeChatConverter:
                     style = span.get("style", "")
                     if "color:" not in style and "color :" not in style:
                         continue
-                    import re as _re
-                    m = _re.search(r"color\s*:\s*([^;]+)", style)
+                    m = re.search(r"color\s*:\s*([^;]+)", style)
                     if not m:
                         continue
                     pyg_color = m.group(1).strip().lower()
                     gh_color = color_map.get(pyg_color)
                     if gh_color:
-                        new_style = _re.sub(
+                        new_style = re.sub(
                             r"color\s*:\s*[^;]+",
                             f"color: {gh_color}",
                             style,
