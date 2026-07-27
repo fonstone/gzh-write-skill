@@ -213,6 +213,9 @@ class WeChatConverter:
                     if not m:
                         continue
                     pyg_color = m.group(1).strip().lower()
+                    # Normalize 3-digit hex to 6-digit (#00f -> #0000ff)
+                    if re.match(r"^#[0-9a-f]{3}$", pyg_color):
+                        pyg_color = "#" + "".join(c * 2 for c in pyg_color[1:])
                     gh_color = color_map.get(pyg_color)
                     if gh_color:
                         new_style = re.sub(
