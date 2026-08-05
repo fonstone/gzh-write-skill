@@ -91,6 +91,10 @@ def transform_webfetch_to_websearch(body: str) -> str:
         "**降级**：脚本报错 → 用 `webfetch` 访问热搜站点（微博热搜、今日头条、百度热搜）抓取热点",
         '**降级**：脚本报错 → web_search "今日热点 {topics第一个垂类}"',
     )
+    body = body.replace(
+        "**降级**：脚本报错 → 用 `webfetch` 访问 aihot.virxact.com 页面抓取热点",
+        '**降级**：脚本报错 → web_search "今日热点 {topics第一个垂类}"',
+    )
     body = body.replace("| 框架 | webfetch 目标站点 | 从结果中提取 |", "| 框架 | 搜索策略 | 从结果中提取 |")
     body = body.replace(
         "| 热点解读 / 纯观点 | `webfetch` 访问 36kr / 微信公众号文章 + 搜索引擎结果页 |",
