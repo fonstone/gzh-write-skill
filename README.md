@@ -50,6 +50,7 @@
 | 效果复盘 | 微信数据分析 API 回填阅读数据 | `references/effect-review.md` |
 | 范文风格库 | SICO 式 few-shot：从你的文章提取风格指纹 | `scripts/extract_exemplar.py` |
 | 风格飞轮 | 学习你的修改，越用越像你 | `references/learn-edits.md` |
+| 活人感四支柱 | 材料门槛 / 说话位置 / 局部问题推进 / 交付禁令（wechat 模式） | `references/human-prose.md` + `scripts/check_prose.py` |
 | 排版学习 | 从任意公众号文章 URL 提取排版主题 | `scripts/learn_theme.py` |
 | 文章采集 | 从公众号 URL 提取正文为 Markdown | `scripts/fetch_article.py` |
 
@@ -107,6 +108,7 @@ GzhWrite 的目标不是"骗过 AI 检测"，而是**写出值得读的文章**�
 6. **编辑锚点**：在 2-3 个关键位置标记"在这里加一句你自己的话"
 7. **学习飞轮**：每次你编辑后说"学习我的修改"，下次初稿更接近你的风格
 8. **文章自检**：说"检查一下"，查看生成档案 + 质量检查
+9. **活人感四支柱**（wechat 模式，源自 human-writing MIT）：材料门槛（≥5 件具体材料，不足压缩为 ≤600 字短稿）→ 说话位置五问 → 局部问题推进 → 交付禁令（翻案句 0 容忍/冒号仅限引原话/无破折号，`scripts/check_prose.py` 自动扫描）
 
 ### 技术科普专属质量机制
 
@@ -283,6 +285,7 @@ gzh-write-skill/
 │   ├── build_playbook.py       # 从历史文章生成 Playbook
 │   ├── learn_edits.py          # 学习人工修改（飞轮核心）
 │   ├── humanness_score.py      # 文章质量打分（11 项检测）
+│   ├── check_prose.py          # 活人感交付禁令扫描（wechat：翻案句/冒号/破折号/黑话/统计形状）
 │   ├── l1_hard_rules.py        # L1 硬性规则自动扫描（含 tech 模式，自动跳过代码块；框架级代码块数量下限 + P0 四象限覆盖检查）
 │   ├── narrative_audit.py      # 叙事线审计（检查 H2 段落覆盖四要素）
 │   ├── extract_exemplar.py     # 范文风格提取（SICO 式 few-shot 建库）
@@ -311,6 +314,7 @@ gzh-write-skill/
 │
 ├── references/                 # Agent 按需加载
 │   ├── writing-guide.md        # 公众号写作规范
+│   ├── human-prose.md          # 活人感四支柱（wechat 模式：材料门槛/说话位置/局部问题推进/交付禁令，源自 human-writing MIT）
 │   ├── frameworks.md           # 通用五段式骨架 + 7 种写作框架
 │   ├── content-enhance.md      # 4 增强策略 + 4 共性高分动作
 │   ├── topic-selection.md      # 选题评估规则

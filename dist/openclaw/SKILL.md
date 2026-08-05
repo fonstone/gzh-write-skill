@@ -48,7 +48,7 @@ description: Use when working with 微信公众号/WeChat official accounts — 
   2. 如果 history.yaml 无记录或用户指定了外部文章 → 跳过此部分，提示"这篇文章不是 GzhWrite 生成的，只做四层质量检查"
 
   **第二部分：四层质检**（按 self-check-pyramid.md 标准执行 L1-L4）
-  1. **L1 硬性规则**：运行 `python3 {baseDir}/scripts/l1_hard_rules.py {article_path} --json`，逐项修复命中项
+  1. **L1 硬性规则**：运行 `python3 {baseDir}/scripts/l1_hard_rules.py {article_path} --json` 与 `python3 {baseDir}/scripts/check_prose.py {article_path}`（wechat 模式），逐项修复命中项
   2. **L2 风格一致性**：按清单检查开头/节奏/口语化/断裂句/标点二次确认
   3. **L3 内容质量**：按清单检查观点支撑/知识输出/文化升维/对立面同理心/类型专项/逐一展示
   4. **L4 活人感终审**：通读回答核心问题，4维度打分
@@ -114,7 +114,7 @@ cd {baseDir} && git fetch origin main --quiet 2>/dev/null
 
 - 存在 → 提取 `name`、`topics`、`tone`、`voice`、`blacklist`、`theme`、`cover_style`、`author`、`content_style`，检查 `mode` 字段：
   - `mode == tech` → 额外加载 `{baseDir}/style-tech.yaml`，覆盖 name/tone/voice/topics/core_principles；`writing_persona` 强制设为 `tech-explainer`；告知用户"当前模式：技术科普（OS/AI/嵌入式）"
-  - `mode == wechat` 或其他 → 保持原逻辑；告知用户"当前模式：公众号写作"
+  - `mode == wechat` 或其他 → 保持原逻辑；**活人感四支柱启用**（wechat 模式专属：材料门槛 Step 3.3 / 说话位置 Step 4.0 / 局部问题推进 Step 4.4 / 交付禁令 Step 4.5+5.3，规范见 `references/human-prose.md`）；告知用户"当前模式：公众号写作"
 - 不存在 → `读取: {baseDir}/references/onboard.md`，完成后回到 Step 1
 
 如果用户直接给了选题 → 跳到 Step 3（仍需框架选择和素材采集，不可跳过）。
@@ -129,7 +129,7 @@ cd {baseDir} && git fetch origin main --quiet 2>/dev/null
 python3 {baseDir}/scripts/fetch_aihot.py --limit 30 --mode {mode}
 ```
 
-**降级**：脚本报错 → 用 `webfetch` 访问 aihot.virxact.com 页面抓取热点
+**降级**：脚本报错 → web_search "今日热点 {topics第一个垂类}"
 
 **2.2 历史分析 + SEO**：
 
@@ -245,6 +245,22 @@ python3 {baseDir}/scripts/topic_diagnosis.py "{选题}" --json --mode {mode}
 
 **降级**：web_search 不可用 → 用 LLM 训练数据中可验证的公开信息。但需告知用户："素材采集未能使用 web_search，建议在编辑锚点处多加入你自己的内容。"密度强化不依赖搜索，始终执行。
 
+**3.3 材料清点**（wechat 模式强制；非虚构长稿 ≥1500 字必须执行）：
+
+```
+读取: {baseDir}/references/human-prose.md 第 1 节（材料门槛）
+```
+
+动笔前内部逐条列出 **≥5 件具体材料**，每件注明来源（用户哪句话 / Step 3.2 哪条素材）。只写概括性类别不算（如"记录方便"不算，"用户原话：xxx"才算）。五件材料还要能组成一条实际过程，不能是五句相邻的道理。
+
+- 材料 ≥5 件 → 通过，进入 Step 4
+- 材料 <5 件 → 按 3.2 的搜索策略**再补搜 2 轮**，重新清点
+- 补搜后仍 <5 件 → 缩小题目或缩短篇幅：**最多写 600 字左右的短稿**，标记 `material_gate: compressed`（Step 7.1 字数预检不再警告，Step 8.1 记录）。宁可明显短于目标字数，绝不用假例子和重复解释填满
+- 用户明确不许追问 → 先研究再重新计数；仍不足 → 同样压缩为短稿
+- 混合创作（现实 + 虚构）先分开：只清点现实中必须准确的部分
+
+**降级**：`material_gate: compressed` 的文章在 Step 8 标记 DONE_WITH_CONCERNS，列出材料缺口。
+
 ---
 
 ### Step 4: 写作
@@ -259,6 +275,7 @@ if mode == tech:
   读取: {baseDir}/references/tech-common-pitfalls.md（领域常见踩坑库，问题驱动写作法配套使用）
 否则:
   读取: {baseDir}/references/writing-guide.md
+  读取: {baseDir}/references/human-prose.md（活人感四支柱：材料门槛/说话位置/局部问题推进/交付禁令。与 writing-guide.md 并行：human-prose 管"像人一样推进"，writing-guide 管"反检测统计与排版纪律"）
 ```
 
 ```
@@ -268,6 +285,16 @@ if mode == tech:
 读取: {baseDir}/history.yaml（最近 3 篇的 dimensions + closing_type 字段）
 读取: {baseDir}/references/exemplars/index.yaml（如果存在）
 ```
+
+**4.0 说话位置**（wechat 模式，动笔前内部回答，答案不交给用户）：
+
+1. 谁在说这件事。他凭什么知道，又有哪些地方只是在推测。
+2. 什么事情让他现在想说。一条新闻、一次经历、一个疑问都可以。
+3. 手里有哪些能托住文章的东西。优先找动作、数字、时间、地点、原话、失败、代价与后来结果。
+4. 他对哪一点有明确判断。判断依据什么，又到哪里为止。
+5. 读者知道上一段以后，最自然会追问什么。
+
+第 3 项太少 → 回到 Step 3.3 重新清点材料。不要先交一篇空稿，再期待用户往里补活人感。
 
 **4.1 维度随机化**：
 
@@ -344,6 +371,10 @@ Category 映射规则：
 > 【反翻译腔模式】{seeds.anti_translation_seeds 随机 1 个}：注意何为主语省略、短句并置、意合句法
 >
 > 【不自标深度模式】{seeds.anti_depth_proclaim_seeds 随机 1 个}：直接写出深层内容，不加"再深入一层"的宣告
+>
+> 【反翻案腔模式】{seeds.anti_pivot_seeds 随机 1 个}：判断从正面下，先给判断再给依据，不先立一个读者没有的误解再推翻
+>
+> 【反假细节模式】{seeds.anti_fake_detail_seeds 随机 1 个}：没有来源的精确时间/神态/天气/摆设/对白都是假细节，不写
 
 建库命令：`python3 {baseDir}/scripts/extract_exemplar.py article.md`
 
@@ -377,7 +408,7 @@ if mode == tech:
 - **开头钩子**：wechat 模式使用 writing-guide.md 开头钩子技法三法之一；tech 模式强制使用 tech-writing-guide.md 的三段式开头结构（痛点场景 + 问题定义 + 阅读钩子），禁止"近年来""随着发展""众所周知"等禁句
 - **段三变体**：按文章类型选——测评类→横向对比表+实测结论；趋势类→3 点配案例/数据；实操类→1. 2. 3. 步骤+模板
 - **素材 + 增强约束**：Step 3.2 的素材和增强材料分散嵌入各 H2 段落。增强策略的核心输出（角度/密度要点/细节/用户声音）必须贯穿全文，不只装饰性出现一次
-- **写作规范**：wechat 模式用 writing-guide.md 的基础规则（禁用词、句长方差、词汇混用、翻译腔免疫、句式不重复、不自标深度、最高法则等）；tech 模式用 tech-writing-guide.md 的五层规范（开头层/行文层/内容层/结尾层/术语规范）
+- **写作规范**：wechat 模式用 writing-guide.md 的基础规则（禁用词、句长方差、词汇混用、翻译腔免疫、句式不重复、不自标深度、最高法则等）+ human-prose.md 的局部问题推进与交付禁令（翻案句 0 容忍/冒号仅限引原话/无破折号/禁论坛服装等，见 `references/human-prose.md` 第 3/4 节）；tech 模式用 tech-writing-guide.md 的五层规范（开头层/行文层/内容层/结尾层/术语规范）
 
 **三层约束优先级（tech 模式写作时的裁决规则）**：
 当叙事架构（tech-narrative-architecture.md）、问题驱动法（tech-writing-guide.md 内容层）、说服力原则（tech-writing-persuasion.md）三者之间出现冲突时，按以下顺序裁决：
@@ -419,6 +450,13 @@ python3 {baseDir}/scripts/l1_hard_rules.py {article_path} --json --mode {mode} {
 ```
 - tech 模式自动追加 `--framework {tech_framework}`，激活代码块数量下限和 P0 四象限覆盖检查
 
+wechat 模式追加动作级扫描（tech 模式跳过）：
+```bash
+python3 {baseDir}/scripts/check_prose.py {article_path}
+```
+- 覆盖：翻案句（含语义变形）/提示性冒号/破折号/硬停词/黑话/模型路标 → **失败项清零**（退出码 0）
+- 警告项（句长变异系数/连词密度/同构排比/名词化/借喻簇/短段连排/重复开场/「」金句密度）→ 进入第二层人工判断
+
 输出包含以下可量化指标——这些指标**不再由 LLM 自行判断**，而是以脚本输出为准：
 
 | 脚本检查项 | 标准 | 通过条件 | 修复方式 |
@@ -431,6 +469,8 @@ python3 {baseDir}/scripts/l1_hard_rules.py {article_path} --json --mode {mode} {
 | 数字单位 | 所有技术指标数字带单位 | L1 `unit_missing` 命中 = 0 | 补充单位 |
 | 代码块数量（tech） | — | 满足 `--framework` 对应框架的下限要求（源码拆解型≥2/实践指南型≥3/技术对比型≥1/全景架构型≥3） | 在瓶颈层和案例闭环处补充代码/配置/命令块 |
 | P0 四象限覆盖（tech） | — | 每个 P0 知识点覆盖"是什么/为什么/何时用/怎么用"四个象限 | 在缺失象限处补充对应维度 |
+| 动作级禁令（wechat） | human-prose.md 第 4 节交付禁令：翻案句 0 容忍（含语义变形）、冒号仅限引原话、破折号 0、黑话/硬停词/模型路标 0 | check_prose.py 失败项 = 0（退出码 0） | 按 check_prose.py 定位的句子逐句正面重写 |
+| 统计形状（wechat） | 句长变异系数 ≥ 0.42；连词 ≤ 7 个/千字；无短段连排/重复开场/多套借喻 | check_prose.py 警告项 → LLM 逐项确认 | 警告项逐项人工判断后定向修复 |
 
 脚本输出中 `summary.passed = true` 时跳过整个第一层。不通过 → 逐项定向修复（每轮最多改 3 处），改完重新跑脚本。最多 2 轮。
 
@@ -508,17 +548,17 @@ if mode == tech:
 ```bash
 python3 {baseDir}/scripts/l1_hard_rules.py {article_path} --json --mode {mode} {tech_framework_flag}
 ```
-- wechat 模式：覆盖 L1-1~L1-6：禁用词/禁用标点/结构套话/空泛工具名/假设性例子/AI 角色边界
+- wechat 模式：覆盖 L1-1~L1-6：禁用词/禁用标点/结构套话/空泛工具名/假设性例子/AI 角色边界 + 追加 `python3 {baseDir}/scripts/check_prose.py {article_path}`（L1-7 翻案腔 0 容忍/冒号仅限引原话/破折号/黑话/模型路标，失败项清零）
 - tech 模式：覆盖 L1-1~L1-6：技术编造扫描/API验证/类比局限性/代码可运行/缩写管理/数字单位 + 框架级代码块数量下限 + P0 四象限覆盖检查（需设置 `{tech_framework_flag}` 为 `--framework <所选框架>`）
 - 命中即逐个定向替换，不留到人工
 
 **L2 风格一致性模式匹配**（半自动）：
-- wechat：开头/节奏/口语化/断裂句/标点/回环呼应/情绪落差
+- wechat：开头/节奏/口语化/断裂句/标点/回环呼应/情绪落差 + check_prose.py 警告项人工确认（句长变异系数/连词密度/同构排比/借喻簇/短段连排/重复开场）+ 假细节扫描（L2-6，见 self-check-pyramid.md）
 - tech：分层递进/SSP原则/逻辑链连续性/类比映射/过渡词多样性
 - 可脚本辅助计数，人工判断通过/不通过
 
 **L3 内容质量深度审查**（人工+AI协作）：
-- wechat：**通用四维诊断**（选题价值/信息增量/读者共鸣/领域适配度，详见 self-check-pyramid.md L3-W1~W4）+ 观点支撑/知识输出/文化升维/对立面同理心/类型专项/升番/案例公正性/契诃夫之枪
+- wechat：**通用四维诊断**（选题价值/信息增量/读者共鸣/领域适配度，详见 self-check-pyramid.md L3-W1~W4）+ 观点支撑/知识输出/文化升维/对立面同理心/类型专项/升番/案例公正性/契诃夫之枪 + 压缩试验（删 1/3 后事实/判断/体验不变 → 注水，保留删短版）+ 结尾检查（L4-5，见 self-check-pyramid.md）
 - tech：**技术四维诊断**（替换泛内容感性指标——技术准确性/知识增量/实践可复现性/领域适配度，详见 tech-self-check-pyramid.md L3-T1~T4）+ 类比保真度/复杂度控制/争议处理
 - Agent 按清单逐项检查，输出具体问题定位到段落
 
@@ -631,7 +671,7 @@ python3 {baseDir}/toolkit/cli.py publish {markdown} --theme tech-pro --tech --co
 | H1 标题 | 存在且 5-64 字节 | 自动修正或提示用户 |
 | 摘要 | 存在且 ≤ 120 UTF-8 字节 | converter 自动生成 |
 | 封面图 | 推送模式下需要 | 无封面则警告，仍可推送（微信会显示默认封面） |
-| 正文字数 | **wechat 模式** ≥ 1500 字（低于 1500 字公众号基本无推荐量）<br>**tech 模式** ≥ 2000 字（深度技术文章可扩展至 5000-6000 字） | 低于下限则警告"文章过短，建议补充内容以保证推荐量" |
+| 正文字数 | **wechat 模式** ≥ 1500 字（低于 1500 字公众号基本无推荐量；`material_gate: compressed` 短稿豁免此条）<br>**tech 模式** ≥ 2000 字（深度技术文章可扩展至 5000-6000 字） | 低于下限则警告"文章过短，建议补充内容以保证推荐量"（压缩短稿改为提示"材料不足已压缩，宁短而实"） |
 | 图片数量 | ≤ 10 张 | 超出则移除末尾多余图片 |
 
 预检全部通过后才进入排版。
@@ -673,6 +713,7 @@ python3 {baseDir}/toolkit/cli.py preview {markdown} --theme {theme} --tech --no-
   output_file: "{output 文件路径}"  # e.g. output/2026-03-31-zhangxue-slow-accumulation.md（tech 模式使用 -tech- 前缀 e.g. output/2026-06-28-tech-page-fault-mechanism.md）
   framework: "{框架}"
   enhance_strategy: "{增强策略}"  # angle_discovery/density_boost/detail_anchoring/real_feel
+  material_gate: "passed"  # 或 "compressed"（材料不足时压缩为 ≤600 字短稿）
   word_count: {字数}
   media_id: "{id}"  # 降级时 null
   writing_persona: "{人格名}"
@@ -726,6 +767,8 @@ python3 {baseDir}/toolkit/cli.py preview {markdown} --theme {theme} --tech --no-
 | 选题为空 | 请用户手动给选题 |
 | SEO 脚本 | LLM 判断 |
 | 素材采集（web_search） | LLM 训练数据中可验证的公开信息 |
+| 材料不足（wechat） | 补搜 2 轮 → 仍不足 → 压缩为 ≤600 字短稿（material_gate: compressed），Step 8 标记 DONE_WITH_CONCERNS |
+| check_prose.py 运行失败 | 跳过脚本，按 human-prose.md 第 4 节交付禁令 LLM 自查 |
 | 维度随机化 | history 空时跳过去重 |
 | Persona 文件不存在 | 回退到 midnight-friend（默认） |
 | 范文库为空 | Fallback 到 exemplar-seeds.yaml（通用模式） |
