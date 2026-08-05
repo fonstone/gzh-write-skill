@@ -92,6 +92,35 @@
           "description": "H1 标题被提取为独立标题字段，不在正文 HTML 中"
         }
       ]
+    },
+    {
+      "id": 3,
+      "name": "human-prose-delivery-bans",
+      "prompt": "检查并修复这篇文章的活人感交付禁令问题：1. 运行 python3 scripts/check_prose.py 检查文章；2. 修复全部失败项（翻案句、提示性冒号、破折号、黑话、硬停词、模型路标）；3. 修复后重新运行直到失败项清零。",
+      "expected_output": "文章通过 check_prose.py（失败项清零，退出码 0），无翻案句、无提示性冒号、无破折号、无模型黑话",
+      "files": ["evals/fixtures/human-prose-violations.md"],
+      "assertions": [
+        {
+          "name": "check_prose_clean",
+          "type": "behavior_check",
+          "description": "运行 check_prose.py 后失败项清零（退出码 0）"
+        },
+        {
+          "name": "no_pivot_sentences",
+          "type": "negative_check",
+          "description": "修复后文章不含翻案句（不是A而是B及变形）"
+        },
+        {
+          "name": "colon_only_for_quotes",
+          "type": "content_check",
+          "description": "冒号仅出现在引出人物直接原话的位置"
+        },
+        {
+          "name": "no_dash",
+          "type": "negative_check",
+          "description": "修复后文章无破折号"
+        }
+      ]
     }
   ]
 }
