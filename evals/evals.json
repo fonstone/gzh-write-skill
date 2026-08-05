@@ -50,7 +50,7 @@
         {
           "name": "has_broken_sentences",
           "type": "content_check",
-          "description": "文章包含至少 3 处破句/不完整句（如破折号中断、自我纠正、省略）"
+          "description": "文章包含至少 3 处破句/不完整句（如自我纠正、省略、语气词断句）"
         },
         {
           "name": "has_specific_details",
