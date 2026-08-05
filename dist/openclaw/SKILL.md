@@ -129,7 +129,7 @@ cd {baseDir} && git fetch origin main --quiet 2>/dev/null
 python3 {baseDir}/scripts/fetch_aihot.py --limit 30 --mode {mode}
 ```
 
-**降级**：脚本报错 → 用 `webfetch` 访问 aihot.virxact.com 页面抓取热点
+**降级**：脚本报错 → web_search "今日热点 {topics第一个垂类}"
 
 **2.2 历史分析 + SEO**：
 
