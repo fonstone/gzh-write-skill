@@ -121,6 +121,35 @@
           "description": "修复后文章无破折号"
         }
       ]
+    },
+    {
+      "id": 4,
+      "name": "tech-prose-delivery-bans",
+      "prompt": "检查并修复这篇技术文章的交付禁令问题：1. 运行 python3 scripts/check_prose.py evals/fixtures/tech-prose-violations.md --tech 检查；2. 修复失败项（提示性冒号、翻案句、破折号、名词化）；3. 注意参数表中的冒号是技术格式，必须保留；4. 重新运行直到失败项清零。",
+      "expected_output": "文章通过 check_prose.py --tech（失败项清零，退出码 0），参数表冒号保留，无提示性冒号/翻案句/破折号",
+      "files": ["evals/fixtures/tech-prose-violations.md"],
+      "assertions": [
+        {
+          "name": "check_prose_tech_clean",
+          "type": "behavior_check",
+          "description": "运行 check_prose.py --tech 后失败项清零（退出码 0）"
+        },
+        {
+          "name": "table_colons_preserved",
+          "type": "content_check",
+          "description": "修复后参数表/表格中的冒号被保留（技术格式豁免生效）"
+        },
+        {
+          "name": "no_promotive_colons",
+          "type": "negative_check",
+          "description": "修复后正文无提示性冒号（一句话总结/核心是/关键是+冒号）"
+        },
+        {
+          "name": "no_pivot_no_dash",
+          "type": "negative_check",
+          "description": "修复后无翻案句、无破折号"
+        }
+      ]
     }
   ]
 }
