@@ -426,7 +426,11 @@ def main() -> int:
         matches = list(re.finditer(re.escape(symbol), prose))
         if symbol in ("：", ":"):
             if args.tech:
-                hard = list(PROMPTIVE_COLON_PATTERN.finditer(prose))
+                hard = (
+                    list(PROMPTIVE_COLON_PATTERN.finditer(prose))
+                    if symbol == "："
+                    else []
+                )
             else:
                 hard = []
                 for match in matches:
