@@ -3,7 +3,7 @@
 
 来源：human-writing (https://github.com/KKKKhazix/human-writing) v1.1.0
 MIT License, Copyright (c) 2026 Human Writing Skill contributors
-GzhWrite 集成：wechat 模式动作级交付禁令扫描（翻案句/冒号/破折号/黑话/模型路标 + 统计形状警告）
+GzhWrite 集成：wechat 模式动作级交付禁令扫描（默认）+ tech 模式中文韵律扫描（--tech：屏蔽表格行、豁免技术格式冒号，仅提示性冒号判失败）
 """
 
 from __future__ import annotations
@@ -98,6 +98,10 @@ FORBIDDEN_PUNCTUATION = {
     "—": "破折号",
     "–": "连接号式破折号",
 }
+
+PROMPTIVE_COLON_PATTERN = re.compile(
+    r"(?:一句话总结|核心是|关键是|重点是|换句话说|简单说|总结|结论)[：:]"
+)
 
 PIVOT_PATTERNS = (
     re.compile(r"(?:并)?不是[^。！？\n]{0,90}而是"),
@@ -226,8 +230,8 @@ def excerpt(value: str, width: int = 72) -> str:
     return value if len(value) <= width else value[: width - 1] + "…"
 
 
-def mask_non_prose(text: str) -> str:
-    """屏蔽代码、网址和机器元数据，同时保留字符位置与换行。"""
+def mask_non_prose(text: str, tech: bool = False) -> str:
+    """屏蔽代码、网址和机器元数据，同时保留字符位置与换行。tech 模式额外屏蔽 Markdown 表格行。"""
 
     def mask(match: re.Match[str]) -> str:
         return "".join("\n" if char == "\n" else " " for char in match.group())
@@ -240,6 +244,8 @@ def mask_non_prose(text: str) -> str:
         re.compile(r"https?://[^\s)>]+"),
         re.compile(r"<[^>\n]+>"),
     )
+    if tech:
+        patterns = patterns + (re.compile(r"^\|.*\|\s*$", re.MULTILINE),)
     masked = text
     for pattern in patterns:
         masked = pattern.sub(mask, masked)
@@ -393,6 +399,11 @@ def read_text(path: str) -> str:
 def main() -> int:
     parser = argparse.ArgumentParser(description="检查中文成稿的硬禁令与模型化形状")
     parser.add_argument("path", help="Markdown 或文本文件路径。使用 - 从标准输入读取")
+    parser.add_argument(
+        "--tech",
+        action="store_true",
+        help="tech 模式：屏蔽表格行，豁免技术格式冒号（仅提示性冒号判失败）",
+    )
     args = parser.parse_args()
 
     try:
@@ -401,7 +412,7 @@ def main() -> int:
         print(f"无法读取稿件。{error}", file=sys.stderr)
         return 2
 
-    prose = mask_non_prose(text)
+    prose = mask_non_prose(text, args.tech)
     total_han = han_count(prose)
     if total_han == 0:
         print("没有检测到汉字。", file=sys.stderr)
@@ -414,13 +425,20 @@ def main() -> int:
     for symbol, label in FORBIDDEN_PUNCTUATION.items():
         matches = list(re.finditer(re.escape(symbol), prose))
         if symbol in ("：", ":"):
-            hard = []
-            for match in matches:
-                tail = prose[match.end() : match.end() + 2].lstrip()
-                if tail[:1] in ("「", "『", "“", "‘", '"'):
-                    quote_colons.append(match)
-                else:
-                    hard.append(match)
+            if args.tech:
+                hard = (
+                    list(PROMPTIVE_COLON_PATTERN.finditer(prose))
+                    if symbol == "："
+                    else []
+                )
+            else:
+                hard = []
+                for match in matches:
+                    tail = prose[match.end() : match.end() + 2].lstrip()
+                    if tail[:1] in ("「", "『", "“", "‘", '"'):
+                        quote_colons.append(match)
+                    else:
+                        hard.append(match)
             matches = hard
         if matches:
             lines = "、".join(str(line_number(text, match.start())) for match in matches[:8])
