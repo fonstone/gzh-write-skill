@@ -78,6 +78,7 @@ CHAPTER_TITLES = {
     "Approach", "Experiments", "Results", "Discussion", "Conclusion",
     "Conclusions", "Evaluation", "Implementation", "Conclusion and Future Work",
 }
+CHAPTER_TITLES_LOWER = {t.lower() for t in CHAPTER_TITLES}
 
 FIGURE_CAPTION_RE = re.compile(r"^(?:Figure|Fig\.|图)\s*(\d+)[\.:：]?\s*(.+)$")
 
@@ -145,7 +146,7 @@ def extract_pdf(doc: fitz.Document, source: str, images_dir: Path) -> PaperPacka
     if not pkg.authors:
         lines = [l.strip() for l in doc[0].get_text().splitlines() if l.strip()]
         for line in lines[1:]:
-            if FIGURE_CAPTION_RE.match(line):
+            if _is_junk_author_line(line):
                 continue
             cand = [a.strip() for a in re.split(r"[;,]", line) if a.strip()]
             if cand:
@@ -179,10 +180,29 @@ def extract_chapters(doc: fitz.Document) -> list[Chapter]:
             m = re.match(r"^\d+(?:\.\d+)*\.?\s+(.+)$", key)
             if m:
                 key = m.group(1)
-            if key in CHAPTER_TITLES and key not in seen:
-                seen.add(key)
+            key = re.sub(r"[\s.:;:，。；、]+$", "", key)
+            key_lower = key.lower()
+            if key_lower in CHAPTER_TITLES_LOWER and key_lower not in seen:
+                seen.add(key_lower)
                 chapters.append(Chapter(title=key, page=pno + 1))
     return chapters
+
+
+def _is_junk_author_line(line: str) -> bool:
+    """True if a page-1 line cannot plausibly be an author list."""
+    if not re.search(r"[A-Za-z\u4e00-\u9fff]", line):
+        return True
+    if re.match(r"^[-–—.\s\d:]+$", line):
+        return True
+    norm = re.sub(r"^\d+(?:\.\d+)*\.?\s+", "", line)
+    lower = re.sub(r"[\s.:;:，。；、]+$", "", norm.strip()).lower()
+    if lower in CHAPTER_TITLES_LOWER:
+        return True
+    if re.match(r"^(abstract|figure|fig\.)", lower):
+        return True
+    if "arxiv" in lower:
+        return True
+    return False
 
 
 def extract_figures(doc: fitz.Document, images_dir: Path) -> list[Figure]:
@@ -239,6 +259,12 @@ def write_chapter_texts(doc: fitz.Document, chapters: list[Chapter], text_dir: P
         (text_dir / f"{i + 1:02d}-{safe}.txt").write_text("".join(buf), encoding="utf-8")
 
 
+def write_full_text(doc: fitz.Document, text_dir: Path) -> None:
+    """Fallback when no chapters were detected: dump the whole document."""
+    text = "".join(doc[pno].get_text() for pno in range(len(doc)))
+    (text_dir / "01-full.txt").write_text(text, encoding="utf-8")
+
+
 def build_package(source: str, out_dir: Path) -> PaperPackage:
     images_dir = out_dir / "images"
     text_dir = out_dir / "text"
@@ -256,6 +282,8 @@ def build_package(source: str, out_dir: Path) -> PaperPackage:
     try:
         pkg = extract_pdf(doc, str(pdf_path), images_dir)
         write_chapter_texts(doc, pkg.chapters, text_dir)
+        if not pkg.chapters:
+            write_full_text(doc, text_dir)
     finally:
         doc.close()
 

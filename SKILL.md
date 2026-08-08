@@ -611,8 +611,8 @@ python3 {skill_dir}/scripts/verify_paper.py {article_path} --assets {skill_dir}/
 ```
 
 - 四类检查：图号引用 / 章节引用 / 数据锚点 / 论文元数据
-- `not_found`（图号不存在、章节不存在、元数据缺失）→ 强制修复后才能进 Step 6
-- `needs_human_check`（数据锚点未找到近似匹配）→ 进 L3 人工确认
+- `not_found`（图号不存在、元数据缺失）→ 强制修复后才能进 Step 6
+- `needs_human_check`（章节引用未命中、数据锚点未找到近似匹配）→ 进 L3 人工确认
 
 **L2 风格一致性模式匹配**（半自动）：
 - wechat：开头/节奏/口语化/断裂句/标点/回环呼应/情绪落差 + check_prose.py 警告项人工确认（句长变异系数/连词密度/同构排比/借喻簇/短段连排/重复开场）+ 假细节扫描（L2-6，见 self-check-pyramid.md）
