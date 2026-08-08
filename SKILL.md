@@ -95,7 +95,7 @@ todowrite:
 **1.1 环境检查**（静默通过或引导修复）：
 
 ```bash
-python3 -c "import markdown, bs4, cssutils, requests, yaml, pygments, PIL" 2>&1
+python3 -c "import markdown, bs4, cssutils, requests, yaml, pygments, PIL, fitz, matplotlib" 2>&1
 ```
 
 | 检查项 | 通过 | 不通过 |
@@ -105,6 +105,7 @@ python3 -c "import markdown, bs4, cssutils, requests, yaml, pygments, PIL" 2>&1
 | `wechat.appid` + `secret` | 静默 | 设 `skip_publish = true` |
 | `image.api_key` 或 `image.providers` 至少一项有效 | 静默 | 设 `skip_image_gen = true` |
 | `references/exemplars/index.yaml` | 静默 | 提示："范文库为空。如果你有已发布的文章（markdown），可以说**'导入范文'**建立风格库，写出来的文章会更像你。没有也不影响使用。" |
+| `fitz` + `matplotlib`（tech 模式用） | 静默 | 提供 `pip install -r requirements.txt`（requirements.txt 已含 PyMuPDF、matplotlib） |
 
 **1.2 版本检查**（静默通过或提醒）：
 
@@ -256,6 +257,30 @@ python3 {skill_dir}/scripts/topic_diagnosis.py "{选题}" --json --mode {mode}
 
 **降级**：`webfetch` 不可用 → 用 LLM 训练数据中可验证的公开信息。但需告知用户："素材采集未能使用 web 搜索，建议在编辑锚点处多加入你自己的内容。"密度强化不依赖搜索，始终执行。
 
+**3.2b 论文素材采集**（tech 模式 + 选题涉论文时启用；用户给了论文 URL/PDF，或选题需要论文支撑时执行）：
+
+**通道 B（Agent 搜索，用户没给论文时）**——先搜索出候选给用户确认：
+
+```bash
+python3 {skill_dir}/scripts/fetch_paper.py --search "{关键词}" -o {skill_dir}/output/paper-assets/
+```
+
+把候选列表（编号/标题/年份/摘要）呈现给用户确认选哪篇，然后用选中编号正式提取：
+
+```bash
+python3 {skill_dir}/scripts/fetch_paper.py --search "{关键词}" --pick {编号} -o {skill_dir}/output/paper-assets/
+```
+
+**通道 A（用户直接提供）**——跳过搜索：
+
+```bash
+python3 {skill_dir}/scripts/fetch_paper.py "{论文 URL 或 PDF 路径}" -o {skill_dir}/output/paper-assets/
+```
+
+提取完成后读取 `{skill_dir}/output/paper-assets/paper.json` 和 `text/` 章节文本，作为素材采集的主来源：**论文锚点（数据/图表/结论，标注"论文 fig.N / 论文 X.X 节"来源）优先**，再按 3.2 补 webfetch 素材。
+
+**降级**：arXiv 不可达或 PDF 解析失败 → 告知用户，回退到 Step 3.2 素材采集。
+
 **3.3 材料清点**（双模式强制；wechat 非虚构长稿 ≥1500 字 / tech 长稿 ≥2000 字必须执行）：
 
 wechat 模式：
@@ -268,7 +293,7 @@ tech 模式：
 ```
 读取: {skill_dir}/references/tech-prose.md 第 1 节（技术材料门槛）
 ```
-动笔前内部逐条列出 **≥5 件可核验技术锚**（版本锚/API命令锚/代码锚/实验锚/踩坑锚），每件注明来源（官方文档/源码行/实测数据/用户环境）。只写概括性类别不算（"Linux 上"不算，"5.4 还是 6.1"才算）。不足 → 按 3.2 再补搜 2 轮 → 仍不足 → **缩小题目（砍掉一个章节）或压缩为 800-1200 字短文**（`material_gate: compressed`）。宁可短而准，绝不用泛化描述和"根据经验"式断言撑篇幅。
+动笔前内部逐条列出 **≥5 件可核验技术锚**（版本锚/API命令锚/代码锚/实验锚/踩坑锚），每件注明来源（官方文档/源码行/实测数据/用户环境）。只写概括性类别不算（"Linux 上"不算，"5.4 还是 6.1"才算）。不足 → 按 3.2 再补搜 2 轮 → 仍不足 → **缩小题目（砍掉一个章节）或压缩为 800-1200 字短文**（`material_gate: compressed`）。宁可短而准，绝不用泛化描述和"根据经验"式断言撑篇幅。有论文素材包时，论文锚点（数据/图表/结论）可计入 5 件可核验技术锚，来源标注"论文 fig.N / 论文 X.X 节"。
 
 **降级**：`material_gate: compressed` 的文章在 Step 8 标记 DONE_WITH_CONCERNS，列出材料缺口。
 
@@ -420,6 +445,8 @@ if mode == tech:
 - **开头钩子**：wechat 模式使用 writing-guide.md 开头钩子技法三法之一；tech 模式强制使用 tech-writing-guide.md 的三段式开头结构（痛点场景 + 问题定义 + 阅读钩子），禁止"近年来""随着发展""众所周知"等禁句
 - **段三变体**：按文章类型选——测评类→横向对比表+实测结论；趋势类→3 点配案例/数据；实操类→1. 2. 3. 步骤+模板
 - **素材 + 增强约束**：Step 3.2 的素材和增强材料分散嵌入各 H2 段落。增强策略的核心输出（角度/密度要点/细节/用户声音）必须贯穿全文，不只装饰性出现一次
+- **论文引用（tech + 有论文素材包）**：正文引用论文图用「图 N」（N 与 paper.json 的 figures.number 一致）；数据/结论必须带论文出处（"论文 4.2 节""Fig.3"）；禁止编造论文中不存在的数据；配图锚点 ≥3 张中论文图占主导，落点标记对应论文图号
+- **公式写作（tech）**：公式用 `$...$`（行内）/ `$$...$$`（块级）LaTeX 书写，遵循 mathtext 子集（分式 `\frac{}{}`、上下标、根式 `\sqrt{}`、希腊字母、求和 `\sum_{}^{}`、极限 `\lim`）；矩阵等 mathtext 不支持的先试 `\mathbf{}` 语法，仍失败则用表格或文字描述
 - **写作规范**：wechat 模式用 writing-guide.md 的基础规则（禁用词、句长方差、词汇混用、翻译腔免疫、句式不重复、不自标深度、最高法则等）+ human-prose.md 的局部问题推进与交付禁令（翻案句 0 容忍/冒号仅限引原话/无破折号/禁论坛服装等，见 `references/human-prose.md` 第 3/4 节）；tech 模式用 tech-writing-guide.md 的五层规范（开头层/行文层/内容层/结尾层/术语规范）+ tech-prose.md 的段落推进与技术交付禁令（每段新增新机制/新代码/新对比/新取舍；翻案句 0 容忍/破折号 0/提示性冒号 0 且技术格式冒号豁免，见 `references/tech-prose.md` 第 3/4 节）
 
 **三层约束优先级（tech 模式写作时的裁决规则）**：
@@ -468,6 +495,15 @@ python3 {skill_dir}/scripts/check_prose.py {article_path}
 python3 {skill_dir}/scripts/check_prose.py {article_path} --tech  # 仅 tech 模式
 ```
 - 覆盖：翻案句（含语义变形）/提示性冒号/破折号/硬停词/黑话/模型路标 → **失败项清零**（退出码 0）
+
+公式渲染校验（tech + 文章含公式时执行；校验语法并渲染为 PNG 图片，原位替换）：
+
+```bash
+python3 {skill_dir}/scripts/render_formulas.py {article_path} -o {skill_dir}/output/{slug}-formulas/
+```
+
+- 退出码 0（全部渲染成功）→ 通过
+- 非 0 → 按报告中的行号修复公式语法，重跑；2 轮仍失败 → 降级为表格或文字描述
 - 警告项（句长变异系数/连词密度/同构排比/名词化/借喻簇/短段连排/重复开场/「」金句密度）→ 进入第二层人工判断
 
 输出包含以下可量化指标——这些指标**不再由 LLM 自行判断**，而是以脚本输出为准：
@@ -485,6 +521,7 @@ python3 {skill_dir}/scripts/check_prose.py {article_path} --tech  # 仅 tech 模
 | 动作级禁令（wechat） | human-prose.md 第 4 节交付禁令：翻案句 0 容忍（含语义变形）、冒号仅限引原话、破折号 0、黑话/硬停词/模型路标 0 | check_prose.py 失败项 = 0（退出码 0） | 按 check_prose.py 定位的句子逐句正面重写 |
 | 统计形状（wechat） | 句长变异系数 ≥ 0.42；连词 ≤ 7 个/千字；无短段连排/重复开场/多套借喻 | check_prose.py 警告项 → LLM 逐项确认 | 警告项逐项人工判断后定向修复 |
 | 中文韵律（tech） | tech-prose.md 第 4 节：翻案句 0 容忍/破折号 0/提示性冒号 0（技术格式冒号豁免：参数表/定义式/警告提示）；句长变异系数 ≥ 0.42；连词 ≤ 7 个/千字 | check_prose.py --tech 失败项 = 0（退出码 0），警告项进 LLM 确认 | 按定位句子正面重写；参数表冒号保留 |
+| 公式渲染（tech） | 所有 `$`/`$$` 公式 mathtext 语法合法 | render_formulas.py 退出码 0 | 按行号修复公式后重跑 |
 
 脚本输出中 `summary.passed = true` 时跳过整个第一层。不通过 → 逐项定向修复（每轮最多改 3 处），改完重新跑脚本。最多 2 轮。
 
@@ -550,6 +587,7 @@ if mode == tech:
 | 缩写管理（tech） | — | 所有缩写首次出现有全称 |
 | 数字单位（tech） | — | 所有技术指标数字带单位 |
 | 代码可运行（tech） | — | 代码块含语言标注+运行环境+预期输出 |
+| 公式渲染（tech） | — | 全部公式渲染成功，无失败项（render_formulas.py 退出码 0） |
 
 不通过 → **定向修复**：只替换不达标的具体句子/段落，不动已通过部分。每轮最多改 3 处，改完立即重新检查该项。2 轮仍不过 → 标注跳过，继续下一项。
 
@@ -565,6 +603,16 @@ python3 {skill_dir}/scripts/l1_hard_rules.py {article_path} --json --mode {mode}
 - wechat 模式：覆盖 L1-1~L1-6：禁用词/禁用标点/结构套话/空泛工具名/假设性例子/AI 角色边界 + 追加 `python3 {skill_dir}/scripts/check_prose.py {article_path}`（L1-7 翻案腔 0 容忍/冒号仅限引原话/破折号/黑话/模型路标，失败项清零）
 - tech 模式：覆盖 L1-1~L1-6：技术编造扫描/API验证/类比局限性/代码可运行/缩写管理/数字单位 + 框架级代码块数量下限 + P0 四象限覆盖检查（需设置 `{tech_framework_flag}` 为 `--framework <所选框架>`）+ 追加 `python3 {skill_dir}/scripts/check_prose.py {article_path} --tech`（中文韵律：翻案句 0 容忍/破折号 0/提示性冒号 0，技术格式冒号豁免，失败项清零；警告项进 L2 人工确认）
 - 命中即逐个定向替换，不留到人工
+
+论文引用验证（tech + 有论文素材包时执行）：
+
+```bash
+python3 {skill_dir}/scripts/verify_paper.py {article_path} --assets {skill_dir}/output/paper-assets/
+```
+
+- 四类检查：图号引用 / 章节引用 / 数据锚点 / 论文元数据
+- `not_found`（图号不存在、章节不存在、元数据缺失）→ 强制修复后才能进 Step 6
+- `needs_human_check`（数据锚点未找到近似匹配）→ 进 L3 人工确认
 
 **L2 风格一致性模式匹配**（半自动）：
 - wechat：开头/节奏/口语化/断裂句/标点/回环呼应/情绪落差 + check_prose.py 警告项人工确认（句长变异系数/连词密度/同构排比/借喻簇/短段连排/重复开场）+ 假细节扫描（L2-6，见 self-check-pyramid.md）
@@ -625,6 +673,8 @@ tech 模式下 humanness_score 仅作补充参考，工程感（L4）评估优�
 **6.3b 风格锚定**：封面确认后，提取视觉锚点（色板 hex、风格关键词、画面调性），后续所有内文配图的提示词必须引用这组锚点，保证全文视觉一致。
 
 **6.4 内文配图**：分析文章结构，为每个需要配图的段落选择图片类型（infographic/scene/flowchart/comparison/framework/timeline），使用对应的结构化提示词模板生成 3-6 张配图提示词（按 visual-prompts.md）。批量调用 image_gen.py，替换 Markdown 占位符。
+
+**论文素材优先**（tech + 有论文素材包）：论文图直接作为配图素材引用（图 1/图 2 已在正文标记落点），论文已有内容不再生成 AI 配图；AI 配图只补封面和论文图未覆盖的概念示意图。
 
 **降级**：image_gen.py 支持多 provider 自动 fallback（按 config.yaml 中 providers 列表顺序尝试）。全部失败 → 输出提示词 + 备选图库关键词，继续。
 
@@ -687,6 +737,7 @@ python3 {skill_dir}/toolkit/cli.py publish {markdown} --theme tech-pro --tech --
 | 封面图 | 推送模式下需要 | 无封面则警告，仍可推送（微信会显示默认封面） |
 | 正文字数 | **wechat 模式** ≥ 1500 字（低于 1500 字公众号基本无推荐量；`material_gate: compressed` 短稿豁免此条）<br>**tech 模式** ≥ 2000 字（深度技术文章可扩展至 5000-6000 字；`material_gate: compressed` 短稿豁免此条） | 低于下限则警告"文章过短，建议补充内容以保证推荐量"（压缩短稿改为提示"材料不足已压缩，宁短而实"） |
 | 图片数量 | ≤ 10 张 | 超出则移除末尾多余图片 |
+| 公式残留（tech） | 无未处理的 `$`/`$$` 公式标记 | 重跑 render_formulas.py |
 
 预检全部通过后才进入排版。
 
@@ -724,6 +775,7 @@ python3 {skill_dir}/toolkit/cli.py preview {markdown} --theme {theme} --tech --n
   title: "{标题}"
   topic_source: "热点抓取"  # 或 "用户指定"
   topic_keywords: ["{词1}", "{词2}"]
+  paper_sources: ["arXiv:2405.xxxxx"]  # 或 null（无论文素材包时）
   output_file: "{output 文件路径}"  # e.g. output/2026-03-31-zhangxue-slow-accumulation.md（tech 模式使用 -tech- 前缀 e.g. output/2026-06-28-tech-page-fault-mechanism.md）
   framework: "{框架}"
   enhance_strategy: "{增强策略}"  # angle_discovery/density_boost/detail_anchoring/real_feel
@@ -781,6 +833,10 @@ python3 {skill_dir}/toolkit/cli.py preview {markdown} --theme {theme} --tech --n
 | 选题为空 | 请用户手动给选题 |
 | SEO 脚本 | LLM 判断 |
 | 素材采集（webfetch） | LLM 训练数据中可验证的公开信息 |
+| arXiv 搜索不可达 | 告知用户，回退 Step 3.2 素材采集 |
+| PDF 解析失败 | 报错，回退 Step 3.2 素材采集 |
+| matplotlib 缺失 | 提示 pip install matplotlib，公式渲染跳过并标记 DONE_WITH_CONCERNS |
+| 论文引用验证失败 | not_found 项强制修复；needs_human_check 进 L3 人工确认 |
 | 材料不足 | 补搜 2 轮 → 仍不足 → 压缩为短稿（wechat ≤600 字 / tech 800-1200 字，material_gate: compressed），Step 8 标记 DONE_WITH_CONCERNS |
 | check_prose.py 运行失败 | 跳过脚本，按 human-prose.md 第 4 节（wechat）/ tech-prose.md 第 4 节（tech）禁令人工自查 |
 | 维度随机化 | history 空时跳过去重 |

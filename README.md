@@ -75,6 +75,9 @@
 | 技术布道者人格 | 专为技术科普设计的写作人格（代码优先、类比驱动、来源可追溯） | `personas/tech-explainer.yaml` |
 | 五套 tech 框架 + 四输出模板 | 原理演进型 / 技术对比型 / 实践指南型 / 源码拆解型 / 全景架构型 + 概念讲解/实践指南/对比分析/全景架构四种输出格式 | `references/tech-frameworks.md` |
 | 输出模板 | 概念讲解类 / 实践指南类 / 对比分析类 / 全景架构类（模板 D），适配七段式骨架和框架体系 | `references/tech-frameworks.md` |
+| 论文素材采集 | 用户提供 PDF/URL 或 arXiv 搜索双通道，提取元数据/章节/图表生成素材包 | `scripts/fetch_paper.py` |
+| 公式渲染 | LaTeX 公式 mathtext 语法校验 + 渲染为 PNG 图片，兼容微信排版 | `scripts/render_formulas.py` |
+| 论文引用验证 | 图号/章节/数据锚点/元数据四类引用完整性验证 | `scripts/verify_paper.py` |
 
 ## 写作人格
 
