@@ -24,7 +24,7 @@ try:
     matplotlib.use("Agg")
     from matplotlib import font_manager as fm
     from matplotlib.mathtext import math_to_image
-except ImportError:  # pragma: no cover - exercised via CLI exit code 2
+except ImportError:  # pragma: no cover - import fallback path
     math_to_image = None
 
 MATH_BLOCK_RE = re.compile(r"\$\$(.+?)\$\$|\$(.+?)\$", re.DOTALL)
@@ -65,7 +65,7 @@ def render_formulas_in_markdown(md_path: Path, out_dir: Path) -> dict:
         out_path = out_dir / f"f{next_no}.png"
         try:
             render_formula(formula, out_path)
-        except Exception as exc:  # mathtext ParseError (ValueError) etc.
+        except ValueError as exc:  # mathtext syntax errors raise ValueError
             errors.append(
                 {"line": line_number(text, start), "formula": formula, "error": str(exc)}
             )
@@ -95,6 +95,10 @@ def main():
         help="Formula image output dir (default: <article-stem>-formulas/ next to the article)",
     )
     args = parser.parse_args()
+
+    if math_to_image is None:
+        print("matplotlib is not installed. Run: pip install matplotlib", file=sys.stderr)
+        sys.exit(2)
 
     md_path = Path(args.path)
     if args.output:
