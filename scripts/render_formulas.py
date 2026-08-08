@@ -49,7 +49,7 @@ def render_formula(formula: str, out_path: Path, fontsize: int = 14, dpi: int = 
     if math_to_image is None:
         raise RuntimeError("matplotlib is not installed")
     prop = fm.FontProperties(size=fontsize)
-    math_to_image(f"${formula}$", str(out_path), prop=prop, dpi=dpi, format="png")
+    math_to_image(f"${formula.strip()}$", str(out_path), prop=prop, dpi=dpi, format="png")
 
 
 def render_formulas_in_markdown(md_path: Path, out_dir: Path) -> dict:

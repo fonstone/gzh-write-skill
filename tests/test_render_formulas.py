@@ -41,6 +41,20 @@ def test_render_formulas_in_markdown(tmp_path):
     assert (out_dir / "f2.png").exists()
 
 
+def test_render_multiline_block_formula(tmp_path):
+    md = tmp_path / "article.md"
+    md.write_text("块级：\n$$\n\\sum_{i=1}^{n} (x_i - \\mu)^2\n$$\n", encoding="utf-8")
+    out_dir = tmp_path / "formulas"
+
+    result = render_formulas_in_markdown(md, out_dir)
+
+    assert not result["errors"]
+    assert len(result["rendered"]) == 1
+    new_text = md.read_text(encoding="utf-8")
+    assert "![公式 f1](" in new_text
+    assert (out_dir / "f1.png").exists()
+
+
 def test_idempotent(tmp_path):
     md = tmp_path / "article.md"
     md.write_text("成本 $E=mc^2$\n", encoding="utf-8")
