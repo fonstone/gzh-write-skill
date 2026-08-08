@@ -20,6 +20,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 COPY_DIRS = ["references", "scripts", "toolkit", "personas"]
 
 COPY_FILES = [
+    "README.md",
     "requirements.txt",
     "config.example.yaml",
     "style.example.yaml",
@@ -112,6 +113,7 @@ def transform_webfetch_to_websearch(body: str) -> str:
         "| 对比 | `webfetch` 访问评测/体验类文章 + V2EX/知乎用户帖子 |",
         '| 对比 | "{方案A} vs {方案B} 评测 OR 体验" + "{方案A OR 方案B} 踩坑 OR 缺点 site:v2ex.com OR site:zhihu.com" |',
     )
+    body = body.replace("再按 3.2 补 webfetch 素材。", "再按 3.2 补 web_search 素材。")
     return body
 
 

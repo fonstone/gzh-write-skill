@@ -50,6 +50,7 @@
 | 效果复盘 | 微信数据分析 API 回填阅读数据 | `references/effect-review.md` |
 | 范文风格库 | SICO 式 few-shot：从你的文章提取风格指纹 | `scripts/extract_exemplar.py` |
 | 风格飞轮 | 学习你的修改，越用越像你 | `references/learn-edits.md` |
+| 活人感四支柱 | 材料门槛 / 说话位置 / 局部问题推进 / 交付禁令（wechat 模式） | `references/human-prose.md` + `scripts/check_prose.py` |
 | 排版学习 | 从任意公众号文章 URL 提取排版主题 | `scripts/learn_theme.py` |
 | 文章采集 | 从公众号 URL 提取正文为 Markdown | `scripts/fetch_article.py` |
 
@@ -70,9 +71,13 @@
 | 踩坑共鸣嵌入 | 每个核心知识点配套开发者真实踩坑点 | `references/tech-common-pitfalls.md` |
 | 结尾模板库 | 3 类（金句总结/互动提问/延伸预告），写作 SOP 最后一步强制执行 | `references/ending_templates.md` |
 | 工程感终审 | L0-L4 五层质检金字塔 + 五层质检（事实/逻辑/说服/风格/传播），含标题/开头/行文/内容/结尾专项校验 | `references/tech-self-check-pyramid.md` |
+| 中文韵律扫描 | 翻译腔/模板腔/句长变异系数/连词密度；参数表冒号豁免，提示性冒号 0 容忍 | `scripts/check_prose.py --tech` + `references/tech-prose.md` |
 | 技术布道者人格 | 专为技术科普设计的写作人格（代码优先、类比驱动、来源可追溯） | `personas/tech-explainer.yaml` |
 | 五套 tech 框架 + 四输出模板 | 原理演进型 / 技术对比型 / 实践指南型 / 源码拆解型 / 全景架构型 + 概念讲解/实践指南/对比分析/全景架构四种输出格式 | `references/tech-frameworks.md` |
 | 输出模板 | 概念讲解类 / 实践指南类 / 对比分析类 / 全景架构类（模板 D），适配七段式骨架和框架体系 | `references/tech-frameworks.md` |
+| 论文素材采集 | 用户提供 PDF/URL 或 arXiv 搜索双通道，提取元数据/章节/图表生成素材包 | `scripts/fetch_paper.py` |
+| 公式渲染 | LaTeX 公式 mathtext 语法校验 + 渲染为 PNG 图片，兼容微信排版 | `scripts/render_formulas.py` |
+| 论文引用验证 | 图号/章节/数据锚点/元数据四类引用完整性验证 | `scripts/verify_paper.py` |
 
 ## 写作人格
 
@@ -107,6 +112,7 @@ GzhWrite 的目标不是"骗过 AI 检测"，而是**写出值得读的文章**�
 6. **编辑锚点**：在 2-3 个关键位置标记"在这里加一句你自己的话"
 7. **学习飞轮**：每次你编辑后说"学习我的修改"，下次初稿更接近你的风格
 8. **文章自检**：说"检查一下"，查看生成档案 + 质量检查
+9. **活人感四支柱**（wechat 模式，源自 human-writing MIT）：材料门槛（≥5 件具体材料，不足压缩为 ≤600 字短稿）→ 说话位置五问 → 局部问题推进 → 交付禁令（翻案句 0 容忍/冒号仅限引原话/无破折号，`scripts/check_prose.py` 自动扫描）
 
 ### 技术科普专属质量机制
 
@@ -125,6 +131,8 @@ GzhWrite 的目标不是"骗过 AI 检测"，而是**写出值得读的文章**�
 13. **代码块数量硬规则**：技术文章必须满足框架级代码块下限（源码拆解型≥2 块、实践指南型≥3 块、技术对比型≥1 块、全景架构型≥3 块、原理演进型推荐不强制），`l1_hard_rules.py --framework` 自动校验
 14. **P0 四象限覆盖检查**：`l1_hard_rules.py` 自动扫描 P0 知识点是否覆盖"是什么/为什么/何时用/怎么用"四个象限，缺失象限在报告中标注
 15. **真实案例闭环强制**：全景架构型和实践指南型必须包含具体场景+具体改动+具体数据的案例闭环（`tech-writing-guide.md` 提供了标准结构和纪律）
+16. **技术材料门槛**：tech 长稿动笔前 ≥5 件可核验技术锚（版本/API命令/代码/实验/踩坑），不足补搜 2 轮 → 缩题或压缩 800-1200 字（`references/tech-prose.md` 第 1 节）
+17. **中文韵律扫描**：`check_prose.py --tech` 自动检查翻译腔/模板腔/句长变异系数/连词密度；参数表/定义式冒号豁免，提示性冒号 0 容忍（`references/tech-prose.md` 第 4 节）
 
 ## 五条 AI 味戒律
 
@@ -283,6 +291,7 @@ gzh-write-skill/
 │   ├── build_playbook.py       # 从历史文章生成 Playbook
 │   ├── learn_edits.py          # 学习人工修改（飞轮核心）
 │   ├── humanness_score.py      # 文章质量打分（11 项检测）
+│   ├── check_prose.py          # 活人感交付禁令扫描（wechat：翻案句/冒号/破折号/黑话/统计形状）
 │   ├── l1_hard_rules.py        # L1 硬性规则自动扫描（含 tech 模式，自动跳过代码块；框架级代码块数量下限 + P0 四象限覆盖检查）
 │   ├── narrative_audit.py      # 叙事线审计（检查 H2 段落覆盖四要素）
 │   ├── extract_exemplar.py     # 范文风格提取（SICO 式 few-shot 建库）
@@ -311,6 +320,7 @@ gzh-write-skill/
 │
 ├── references/                 # Agent 按需加载
 │   ├── writing-guide.md        # 公众号写作规范
+│   ├── human-prose.md          # 活人感四支柱（wechat 模式：材料门槛/说话位置/局部问题推进/交付禁令，源自 human-writing MIT）
 │   ├── frameworks.md           # 通用五段式骨架 + 7 种写作框架
 │   ├── content-enhance.md      # 4 增强策略 + 4 共性高分动作
 │   ├── topic-selection.md      # 选题评估规则
@@ -329,6 +339,7 @@ gzh-write-skill/
 │   ├── tech-writing-persuasion.md      # [tech] 技术写作说服力（Cialdini 七原则 + RISE 段落节奏 + 注意力引导系统）
 │   ├── tech-frameworks.md      # [tech] 5 套技术科普框架 + 输出模板（概念讲解/实践指南/对比分析/全景架构）
 │   ├── tech-self-check-pyramid.md  # [tech] L0-L4 五层质检金字塔（含事实/逻辑/说服/风格/传播五层）
+│   ├── tech-prose.md          # [tech] 技术版四支柱（材料门槛/说话位置/段落推进/交付禁令，中文韵律 + 技术格式冒号豁免）
 │   ├── ai-patterns.md          # [通用] AI 刻板模式三层扫描（短语层/句式层/节奏层 + 自然度评分体系）
 │   ├── ai-patterns-examples.md # [通用] AI 模式反面示例 + 正向改写对照
 │   ├── headline_templates.md   # [tech] 标题模板库（3 类模板 + 3 项质检）
