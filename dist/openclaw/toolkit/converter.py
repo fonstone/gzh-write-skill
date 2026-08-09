@@ -174,6 +174,7 @@ class WeChatConverter:
             "markdown.extensions.tables",
             "markdown.extensions.nl2br",
             "markdown.extensions.sane_lists",
+            "markdown.extensions.attr_list",
             "codehilite",
         ]
         extension_configs = {
@@ -236,9 +237,10 @@ class WeChatConverter:
             src = img.get("src", "")
             if src:
                 images.append(src)
-            # Ensure responsive image styles
+            # Ensure responsive image styles (skip images that already carry
+            # explicit sizing, e.g. formula images from render_formulas.py)
             existing = img.get("style", "")
-            if "max-width" not in existing:
+            if "max-width" not in existing and "height" not in existing:
                 additions = "max-width: 100%; height: auto; display: block; margin: 24px auto"
                 img["style"] = f"{existing}; {additions}" if existing else additions
         return str(soup), images
@@ -272,6 +274,13 @@ class WeChatConverter:
                 for prop, val in styles.items():
                     if prop not in style_dict:
                         style_dict[prop] = val
+
+                # Inline formula images (from render_formulas.py) carry explicit
+                # sizing and must stay in the text flow — don't apply block-level
+                # theme img rules (display/margin) to them.
+                if elem.name == "img" and "height:" in existing:
+                    style_dict.pop("display", None)
+                    style_dict.pop("margin", None)
 
                 elem["style"] = "; ".join(f"{k}: {v}" for k, v in style_dict.items())
 

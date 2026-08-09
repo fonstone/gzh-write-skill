@@ -13,6 +13,13 @@ def test_find_formulas():
     assert found[1][2] == "\\frac{a}{b}"
 
 
+def test_find_formulas_block_flag():
+    text = "行内 $E=mc^2$ 与块级 $$\\frac{a}{b}$$ 公式"
+    found = find_formulas(text)
+    assert found[0][3] is False  # inline $...$
+    assert found[1][3] is True   # block $$...$$
+
+
 def test_render_valid_formula(tmp_path):
     out = tmp_path / "f.png"
     render_formula("E=mc^2", out)
@@ -23,6 +30,30 @@ def test_render_valid_formula(tmp_path):
 def test_render_invalid_formula_raises(tmp_path):
     with pytest.raises(ValueError):
         render_formula("\\unknowncommand{x}", tmp_path / "bad.png")
+
+
+def test_render_inline_formula_gets_height_style(tmp_path):
+    md = tmp_path / "article.md"
+    md.write_text("成本 $E=mc^2$ 结束\n", encoding="utf-8")
+    out_dir = tmp_path / "formulas"
+
+    result = render_formulas_in_markdown(md, out_dir)
+
+    assert not result["errors"]
+    new_text = md.read_text(encoding="utf-8")
+    assert '![公式 f1](formulas/f1.png){style="height:1.5em;vertical-align:middle"}' in new_text
+
+
+def test_render_block_formula_gets_block_style(tmp_path):
+    md = tmp_path / "article.md"
+    md.write_text("块级 $$\\frac{a}{b}$$ 公式\n", encoding="utf-8")
+    out_dir = tmp_path / "formulas"
+
+    result = render_formulas_in_markdown(md, out_dir)
+
+    assert not result["errors"]
+    new_text = md.read_text(encoding="utf-8")
+    assert '![公式 f1](formulas/f1.png){style="max-width:85%;display:block;margin:0 auto"}' in new_text
 
 
 def test_render_formulas_in_markdown(tmp_path):

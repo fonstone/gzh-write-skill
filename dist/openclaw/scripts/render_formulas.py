@@ -30,13 +30,17 @@ except ImportError:  # pragma: no cover - import fallback path
 MATH_BLOCK_RE = re.compile(r"\$\$(.+?)\$\$|\$(.+?)\$", re.DOTALL)
 RENDERED_ALT_RE = re.compile(r"!\[公式 f\d+\]\(")
 
+INLINE_FORMULA_STYLE = 'height:1.5em;vertical-align:middle'
+BLOCK_FORMULA_STYLE = 'max-width:85%;display:block;margin:0 auto'
 
-def find_formulas(md_text: str) -> list[tuple[int, int, str]]:
-    """Return [(start, end, formula)] for each $...$ / $$...$$ match."""
+
+def find_formulas(md_text: str) -> list[tuple[int, int, str, bool]]:
+    """Return [(start, end, formula, is_block)] for each $...$ / $$...$$ match."""
     out = []
     for m in MATH_BLOCK_RE.finditer(md_text):
-        formula = m.group(1) if m.group(1) is not None else m.group(2)
-        out.append((m.start(), m.end(), formula))
+        is_block = m.group(1) is not None
+        formula = m.group(1) if is_block else m.group(2)
+        out.append((m.start(), m.end(), formula, is_block))
     return out
 
 
@@ -44,7 +48,7 @@ def line_number(text: str, pos: int) -> int:
     return text.count("\n", 0, pos) + 1
 
 
-def render_formula(formula: str, out_path: Path, fontsize: int = 14, dpi: int = 300) -> None:
+def render_formula(formula: str, out_path: Path, fontsize: int = 10, dpi: int = 300) -> None:
     """Render a formula to PNG. Raises ValueError on syntax error."""
     if math_to_image is None:
         raise RuntimeError("matplotlib is not installed")
@@ -61,7 +65,7 @@ def render_formulas_in_markdown(md_path: Path, out_dir: Path) -> dict:
     next_no = len(rendered_alt) + 1
 
     parts, last, rendered, errors = [], 0, [], []
-    for start, end, formula in find_formulas(text):
+    for start, end, formula, is_block in find_formulas(text):
         out_path = out_dir / f"f{next_no}.png"
         try:
             render_formula(formula, out_path)
@@ -72,11 +76,13 @@ def render_formulas_in_markdown(md_path: Path, out_dir: Path) -> dict:
             next_no += 1
             continue
         rel = os.path.relpath(out_path, md_path.parent).replace("\\", "/")
+        style = BLOCK_FORMULA_STYLE if is_block else INLINE_FORMULA_STYLE
         rendered.append(
-            {"number": next_no, "line": line_number(text, start), "formula": formula, "file": rel}
+            {"number": next_no, "line": line_number(text, start), "formula": formula,
+             "file": rel, "is_block": is_block}
         )
         parts.append(text[last:start])
-        parts.append(f"![公式 f{next_no}]({rel})")
+        parts.append(f'![公式 f{next_no}]({rel}){{style="{style}"}}')
         last = end
         next_no += 1
     parts.append(text[last:])
