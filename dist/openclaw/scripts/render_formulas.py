@@ -30,8 +30,8 @@ except ImportError:  # pragma: no cover - import fallback path
 MATH_BLOCK_RE = re.compile(r"\$\$(.+?)\$\$|\$(.+?)\$", re.DOTALL)
 RENDERED_ALT_RE = re.compile(r"!\[公式 f\d+\]\(")
 
-INLINE_FORMULA_STYLE = 'height:1.5em;vertical-align:middle'
-BLOCK_FORMULA_STYLE = 'max-width:85%;display:block;margin:0 auto'
+INLINE_FORMULA_STYLE = 'height:1.35em;vertical-align:-0.15em'
+BLOCK_FORMULA_STYLE = 'max-width:60%;display:block;margin:6px auto'
 
 
 def find_formulas(md_text: str) -> list[tuple[int, int, str, bool]]:
@@ -48,7 +48,7 @@ def line_number(text: str, pos: int) -> int:
     return text.count("\n", 0, pos) + 1
 
 
-def render_formula(formula: str, out_path: Path, fontsize: int = 10, dpi: int = 300) -> None:
+def render_formula(formula: str, out_path: Path, fontsize: int = 8, dpi: int = 150) -> None:
     """Render a formula to PNG. Raises ValueError on syntax error."""
     if math_to_image is None:
         raise RuntimeError("matplotlib is not installed")
