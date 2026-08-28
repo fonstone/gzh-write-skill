@@ -270,7 +270,7 @@ python3 {baseDir}/scripts/fetch_paper.py "{论文 URL 或 PDF 路径}" -o {baseD
 
 **降级**：arXiv 不可达或 PDF 解析失败 → 告知用户，回退到 Step 3.2 素材采集。
 
-**3.3 材料清点**（双模式强制；wechat 非虚构长稿 ≥1500 字 / tech 长稿 ≥3000 字必须执行）：
+**3.3 材料清点**（双模式强制；wechat 非虚构长稿 ≥1500 字 / tech 长稿 ≥2000 字必须执行）：
 
 wechat 模式：
 ```
@@ -282,7 +282,7 @@ tech 模式：
 ```
 读取: {baseDir}/references/tech-prose.md 第 1 节（技术材料门槛）
 ```
-动笔前内部逐条列出 **≥7 件可核验技术锚**（版本锚/API命令锚/代码锚/实验锚/踩坑锚），每件注明来源（官方文档/源码行/实测数据/用户环境）。技术锚数量与目标篇幅挂钩：3000-4000 字至少 7 件，4000-6500 字至少 10 件，6500+ 字至少 12 件。只写概括性类别不算（"Linux 上"不算，"5.4 还是 6.1"才算）。不足 → 按 3.2 再补搜 2 轮 → 仍不足 → **缩小题目（砍掉一个章节）或压缩为 800-1200 字短文**（`material_gate: compressed`）。宁可短而准，绝不用泛化描述和"根据经验"式断言撑篇幅。有论文素材包时，论文锚点（数据/图表/结论）可计入可核验技术锚，来源标注"论文 fig.N / 论文 X.X 节"。
+动笔前内部逐条列出 **≥5 件可核验技术锚**（版本锚/API命令锚/代码锚/实验锚/踩坑锚），每件注明来源（官方文档/源码行/实测数据/用户环境）。只写概括性类别不算（"Linux 上"不算，"5.4 还是 6.1"才算）。不足 → 按 3.2 再补搜 2 轮 → 仍不足 → **缩小题目（砍掉一个章节）或压缩为 800-1200 字短文**（`material_gate: compressed`）。宁可短而准，绝不用泛化描述和"根据经验"式断言撑篇幅。有论文素材包时，论文锚点（数据/图表/结论）可计入 5 件可核验技术锚，来源标注"论文 fig.N / 论文 X.X 节"。
 
 **降级**：`material_gate: compressed` 的文章在 Step 8 标记 DONE_WITH_CONCERNS，列出材料缺口。
 
@@ -435,7 +435,9 @@ if mode == tech:
 - **段三变体**：按文章类型选——测评类→横向对比表+实测结论；趋势类→3 点配案例/数据；实操类→1. 2. 3. 步骤+模板
 - **素材 + 增强约束**：Step 3.2 的素材和增强材料分散嵌入各 H2 段落。增强策略的核心输出（角度/密度要点/细节/用户声音）必须贯穿全文，不只装饰性出现一次
 - **论文引用（tech + 有论文素材包）**：正文引用论文图用「图 N」（N 与 paper.json 的 figures.number 一致）；数据/结论必须带论文出处（"论文 4.2 节""Fig.3"）；禁止编造论文中不存在的数据；配图锚点 ≥3 张中论文图占主导，落点标记对应论文图号
-- **公式写作（tech）**：公式用 `$...$`（行内）/ `$$...$$`（块级）LaTeX 书写，遵循 mathtext 子集（分式 `\frac{}{}`、上下标、根式 `\sqrt{}`、希腊字母、求和 `\sum_{}^{}`、极限 `\lim`）；矩阵等 mathtext 不支持的先试 `\mathbf{}` 语法，仍失败则用表格或文字描述。渲染规则：行内公式自动缩放到正文行高（height:1.5em 基线对齐），块级公式居中显示（max-width:85%），与正文协调不突兀
+- **公式写作（tech）**：公式用 `$...$`（行内）/ `$$...$$`（块级）LaTeX 书写，遵循 mathtext 子集（分式 `\frac{}{}`、上下标、根式 `\sqrt{}`、希腊字母、求和 `\sum_{}^{}`、极限 `\lim`）；不等式可写 `\le`/`\ge`（渲染器会自动规范为 `\leq`/`\geq`，两种写法都支持）；矩阵等 mathtext 不支持的先试 `\mathbf{}` 语法，仍失败则用表格或文字描述。渲染规则：Computer Modern 字体（经典 LaTeX 外观），行内公式按实际字形度量以 em 为单位缩放并与正文基线对齐（`height:Xem;vertical-align:-Yem`），块级公式居中显示（`display:block;height:Xem;max-width:88%`），高分辨率 300dpi + 紧裁剪，与正文协调不突兀
+- **公式模式（formula_mode）**：`config.yaml` 的 `formula_mode` 决定公式最终承载方式。**默认 `latex`**——源 Markdown 保留原始 `$...$`/`$$...$$`，转换器原样输出，本地预览自动注入 MathJax 自然渲染（不再预渲染成图片，md 始终可编辑）；推送到公众号时由你下游支持 MathJax/KaTeX 的渲染器显示。**`image` 模式**（旧行为）才把公式渲染成 PNG 图片（`scripts/render_formulas.py`），用于不依赖下游渲染器的场景。其余「公式渲染校验」步骤仅在 `image` 模式执行；`latex` 模式下原始 `$...$` 是预期内容，**不会被 lint/validate 判为 ERROR**。
+- **文章规格（tech 深度文，强制对齐 `templates/ARTICLE_TEMPLATE.md` 与 `templates/reference-ai-os.md`）**：正文 **≥ 5000 中文字**；含 **3-4 张原创示意图**（`scripts/make_diagrams.py` 范式：matplotlib + 微软雅黑，图注标「原创示意图」并注概念来源，**不复制论文原图**）；引用 **≥ 10 篇真实论文**（正文 `[N]` 行内标注、文末 `## 参考文献` 列书目，格式见模板）；公式用**原始 LaTeX**（`formula_mode: latex`）；代码用带语言标注的围栏块（自动转美观代码卡片）。每次生成深度文都须达到该格式，确保各篇观感与信息密度一致。
 - **写作规范**：wechat 模式用 writing-guide.md 的基础规则（禁用词、句长方差、词汇混用、翻译腔免疫、句式不重复、不自标深度、最高法则等）+ human-prose.md 的局部问题推进与交付禁令（翻案句 0 容忍/冒号仅限引原话/无破折号/禁论坛服装等，见 `references/human-prose.md` 第 3/4 节）；tech 模式用 tech-writing-guide.md 的五层规范（开头层/行文层/内容层/结尾层/术语规范）+ tech-prose.md 的段落推进与技术交付禁令（每段新增新机制/新代码/新对比/新取舍；翻案句 0 容忍/破折号 0/提示性冒号 0 且技术格式冒号豁免，见 `references/tech-prose.md` 第 3/4 节）
 
 **三层约束优先级（tech 模式写作时的裁决规则）**：
@@ -485,15 +487,19 @@ python3 {baseDir}/scripts/check_prose.py {article_path} --tech  # 仅 tech 模�
 ```
 - 覆盖：翻案句（含语义变形）/提示性冒号/破折号/硬停词/黑话/模型路标 → **失败项清零**（退出码 0）
 
-公式渲染校验（tech + 文章含公式时执行；校验语法并渲染为 PNG 图片，原位替换）：
+公式校验（tech + 文章含公式时执行）：
+
+- **`formula_mode: latex`（默认）**：只做 LaTeX 语法校验（括号配对 / mathtext 子集），**不渲染成图**；原始 `$...$`/`$$...$$` 原样保留，由预览注入的 MathJax 渲染。语法错误按行号修复后重跑。
+- **`formula_mode: image`（旧行为）**：校验语法并渲染为 PNG 图片，原位替换：
 
 ```bash
 python3 {baseDir}/scripts/render_formulas.py {article_path} -o {baseDir}/output/{slug}-formulas/
 ```
 
-- 退出码 0（全部渲染成功）→ 通过
-- 非 0 → 按报告中的行号修复公式语法，重跑；2 轮仍失败 → 降级为表格或文字描述
-- 警告项（句长变异系数/连词密度/同构排比/名词化/借喻簇/短段连排/重复开场/「」金句密度）→ 进入第二层人工判断
+  - 渲染参数可调：`--fontsize`（默认 16pt 匹配正文）、`--color`（默认 #333333，可传主题正文色如 #1f2937）、`--fontset`（默认 cm）、`--inline-scale` / `--block-scale`（行内/块级缩放）
+  - 退出码 0（全部渲染成功）→ 通过
+  - 非 0 → 按报告中的行号修复公式语法，重跑；2 轮仍失败 → 降级为表格或文字描述
+  - 警告项（句长变异系数/连词密度/同构排比/名词化/借喻簇/短段连排/重复开场/「」金句密度）→ 进入第二层人工判断
 
 输出包含以下可量化指标——这些指标**不再由 LLM 自行判断**，而是以脚本输出为准：
 
@@ -724,9 +730,9 @@ python3 {baseDir}/toolkit/cli.py publish {markdown} --theme tech-pro --tech --co
 | H1 标题 | 存在且 5-64 字节 | 自动修正或提示用户 |
 | 摘要 | 存在且 ≤ 120 UTF-8 字节 | converter 自动生成 |
 | 封面图 | 推送模式下需要 | 无封面则警告，仍可推送（微信会显示默认封面） |
-| 正文字数 | **wechat 模式** ≥ 1500 字（低于 1500 字公众号基本无推荐量；`material_gate: compressed` 短稿豁免此条）<br>**tech 模式** ≥ 3000 字（深度技术文章可扩展至 6500-8000 字；段三+段四合计 ≥48% 且含原理纵深四层；`material_gate: compressed` 短稿豁免此条） | 低于下限则警告"文章过短，建议补充内容以保证推荐量"（压缩短稿改为提示"材料不足已压缩，宁短而实"） |
+| 正文字数 | **wechat 模式** ≥ 1500 字（低于 1500 字公众号基本无推荐量；`material_gate: compressed` 短稿豁免此条）<br>**tech 模式** ≥ 2000 字（深度技术文章可扩展至 5000-6000 字；`material_gate: compressed` 短稿豁免此条） | 低于下限则警告"文章过短，建议补充内容以保证推荐量"（压缩短稿改为提示"材料不足已压缩，宁短而实"） |
 | 图片数量 | ≤ 10 张 | 超出则移除末尾多余图片 |
-| 公式残留（tech） | 无未处理的 `$`/`$$` 公式标记 | 重跑 render_formulas.py |
+| 公式（tech） | `latex` 模式：原始 `$...$`/`$$...$$` 为预期，仅校验语法合法；`image` 模式：无未处理的 `$`/`$$` 公式标记（否则重跑 render_formulas.py） | `latex` 模式语法合法即通过；`image` 模式重跑 render_formulas.py |
 
 预检全部通过后才进入排版。
 
@@ -740,12 +746,39 @@ python3 {baseDir}/toolkit/cli.py publish {markdown} --theme tech-pro --tech --co
 
 Converter 自动处理：CJK 加空格、加粗标点外移、列表转 section、外链转脚注、暗黑模式、容器语法。tech 模式额外启用 tech-enhance（代码块高亮、行内标识符分类着色、参数表格样式）。
 
+**7.2.1 自动排版预处理（参考 gzh-design-skill 智能处理，preview/publish 自动执行）**：在 Converter 之前，CLI 会对源 Markdown 跑一遍 `toolkit/layout.py` 排版预处理，把普通文章增强为更适合公众号的版本。全部确定性、幂等，不增删原文实质内容：
+
+- **中文全角标点**：中文后的半角 `, ; : ! ? .` 与中英混排处的英文直引号归一为全角（代码围栏/行内代码内跳过）
+- **章节自动编号**：按 `##` 出现顺序分配 `01 / 02 / 03 …`，末章若为结语/总结类用 `∞` 变体
+- **目录导读**：取前 3 个 `##` 生成「本文导读」卡片（≥3 节时；精选非全量）
+- **尾部签名区**：末尾追加「我是 {作者}，{简介}。+ 点赞/在看/转发三连」（占位 `{{作者名}}`/`{{简介}}`，用户替换；原文已有签名段则并入不重复）
+- **英文标签**（默认关，需 `--english-label`）：据中文章节标题生成英文 eyebrow 标签（教程→TUTORIAL、总结→SUMMARY、案例→CASE…）
+- **关键词下划线**（默认关，需 `--keyword-underline` 或写作阶段用 `<u>关键词</u>`）：给加粗短语加下划线，Converter 会把 `<u>` 转为 `text-decoration:underline` 的 span（公众号会剥离裸 `<u>`）
+
+可通过 `--no-layout` 整体跳过，或用 `--no-punct / --no-numbering / --no-toc / --no-signature` 逐项关闭；也可单独运行 `cli.py layout {md}` 产出增强后的 Markdown 人工确认。
+
+**7.2.2 第一道门：源侧 lint（参考 gzh-design-skill 双门，preview/publish 自动执行）**：排版/转换前先跑 `toolkit/component_lint.py` 检查源 Markdown，提前抓出平台失效标记并给出行号（避免粘贴后才发现）：
+
+- ERROR：未渲染的 `$...$`/`$$...$$` 公式（`formula_mode: image` 下忘了跑 render_formulas.py；`latex` 模式下原始 `$...$` 是预期、不告警）、手写 `<div>`/`class=`/`id=`/`<style>`/`position:`/`@media`/`display:grid`/`var(--)`、`white-space:pre`
+- WARNING：中文后半角标点、英文直引号、缺 `##` 章节结构、图片空 alt
+
+publish 在存在 ERROR 时会**终止发布**；preview 仅报告。与 7.3 的输出端校验（`validate_html.py`）共同构成双门闭环。
+
+**7.3 双门校验（参考 gzh-design-skill，自动执行）**：preview / publish 命令在生成 HTML 后自动运行输出端合规校验（`toolkit/validate_html.py`），ERROR 必须清零才可推送：
+
+- ERROR 级：`<style>/<script>/<link>/<div>` 标签、`class=/id=` 属性、`position:fixed/absolute/sticky`、`float`、`@media/@keyframes/@import`、`display:grid`、CSS 变量、外部字体、**`formula_mode: image` 下未渲染的 `$`/`$$` 公式残留（`latex` 模式原始 `$...$` 为预期，不校验）**
+- WARNING 级（人工确认）：中文后半角标点、英文直引号
+- 校验对象是推送给公众号的 HTML 片段（非本地预览外壳）；preview 的 `--no-open` 模式下同样执行
+
 ```bash
 # 发布（tech 模式追加 --tech）
 python3 {baseDir}/toolkit/cli.py publish {markdown} --cover {cover} --theme {theme} --tech --title "{title}" --digest "{digest}"
 
 # 降级：本地预览（tech 模式追加 --tech）
 python3 {baseDir}/toolkit/cli.py preview {markdown} --theme {theme} --tech --no-open -o {output}.html
+
+# 单独校验一个 HTML 文件（exit 0 = 无 ERROR）
+python3 {baseDir}/toolkit/cli.py validate {output}.html
 ```
 
 **tech 模式下 `{theme}` 取值**：按 7.0 主题映射规则，默认 `tech-pro`。

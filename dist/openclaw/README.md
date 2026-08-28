@@ -76,7 +76,7 @@
 | 五套 tech 框架 + 四输出模板 | 原理演进型 / 技术对比型 / 实践指南型 / 源码拆解型 / 全景架构型 + 概念讲解/实践指南/对比分析/全景架构四种输出格式 | `references/tech-frameworks.md` |
 | 输出模板 | 概念讲解类 / 实践指南类 / 对比分析类 / 全景架构类（模板 D），适配七段式骨架和框架体系 | `references/tech-frameworks.md` |
 | 论文素材采集 | 用户提供 PDF/URL 或 arXiv 搜索双通道，提取元数据/章节/图表生成素材包 | `scripts/fetch_paper.py` |
-| 公式渲染 | LaTeX 公式 mathtext 语法校验 + 渲染为 PNG 图片，兼容微信排版 | `scripts/render_formulas.py` |
+| 公式（LaTeX） | 默认 `formula_mode: latex`：源 Markdown 保留原始 `$...$`/`$$...$$`，预览注入 MathJax 自然渲染，md 始终可编辑；`image` 模式才渲染为 PNG 图片兼容微信排版 | `scripts/render_formulas.py`（image 模式）|
 | 论文引用验证 | 图号/章节/数据锚点/元数据四类引用完整性验证 | `scripts/verify_paper.py` |
 
 ## 写作人格
@@ -301,7 +301,10 @@ gzh-write-skill/
 │   └── build_openclaw.py       # SKILL.md → OpenClaw 格式转换
 │
 ├── toolkit/                    # Markdown → 微信工具链
-│   ├── cli.py                  # CLI（preview / publish / gallery / themes / image-post）
+│   ├── cli.py                  # CLI（preview / publish / layout / validate / gallery / themes / image-post）
+│   ├── validate_html.py        # 输出端合规校验（双门 QA：禁用标签/CSS + image 模式公式残留 + 标点检查）
+│   ├── component_lint.py       # 源侧 lint（第一道门：image 模式未渲染公式/裸标签/半角标点 + 行号；latex 模式接受原始 $...$）
+│   ├── layout.py               # 排版预处理（全角标点/章节编号/目录/签名区/英文标签/下划线）
 │   ├── converter.py            # Markdown → 内联样式 HTML + 微信兼容修复
 │   ├── theme.py                # YAML 主题引擎
 │   ├── publisher.py            # 微信草稿箱 API + 小绿书图片帖
@@ -412,8 +415,14 @@ python3 scripts/build_openclaw.py
 ## Toolkit 独立使用
 
 ```bash
-# Markdown → 微信 HTML
+# Markdown → 微信 HTML（自动：源侧 lint → 排版预处理 → 转换 → 双门校验）
 python3 toolkit/cli.py preview article.md --theme github
+
+# 单独校验 HTML 合规性（禁用标签/属性/CSS + 公式残留检查）
+python3 toolkit/cli.py validate article.html
+
+# 排版预处理（自动：全角标点/章节编号/目录/签名区；可逐项关闭）
+python3 toolkit/cli.py layout article.md --output article.layout.md
 
 # 主题画廊
 python3 toolkit/cli.py gallery

@@ -19,6 +19,9 @@ from converter import WeChatConverter, preview_html
 from theme import load_theme, list_themes
 from wechat_api import get_access_token, upload_image, upload_thumb
 from publisher import create_draft, create_image_post
+from validate_html import validate as validate_html
+from component_lint import lint_markdown as lint_source
+from layout import layout_markdown, LayoutOptions
 
 # Config file search order
 CONFIG_PATHS = [
@@ -38,14 +41,145 @@ def load_config() -> dict:
     return {}
 
 
+def _add_layout_flags(p):
+    """Attach the shared 排版 toggle flags to a subparser."""
+    p.add_argument("--no-layout", action="store_true",
+                   help="跳过排版预处理（直接转换，不走智能处理）")
+    p.add_argument("--no-punct", action="store_true", help="关闭中文全角标点归一")
+    p.add_argument("--no-numbering", action="store_true", help="关闭章节自动编号")
+    p.add_argument("--no-toc", action="store_true", help="关闭目录导读卡片")
+    p.add_argument("--no-signature", action="store_true", help="关闭尾部签名区")
+    p.add_argument("--english-label", action="store_true", help="为 ## 标题加英文 eyebrow 标签")
+    p.add_argument("--keyword-underline", action="store_true", help="给加粗短语加下划线（实验性）")
+
+
+def _build_layout_options(args, cfg) -> LayoutOptions:
+    """Construct LayoutOptions from CLI args + config fallbacks."""
+    wechat_cfg = cfg.get("wechat", {})
+    author = getattr(args, "author", None) or wechat_cfg.get("author") or "{{作者名}}"
+    return LayoutOptions(
+        fullwidth_punct=not getattr(args, "no_punct", False),
+        section_numbering=not getattr(args, "no_numbering", False),
+        toc=not getattr(args, "no_toc", False),
+        signature=not getattr(args, "no_signature", False),
+        english_label=getattr(args, "english_label", False),
+        keyword_underline=getattr(args, "keyword_underline", False),
+        author=author,
+        bio=cfg.get("bio", "{{一句话简介，如：热衷于分享 AI 观察与干货}}"),
+        mode=("tech" if getattr(args, "tech", False) else "wechat"),
+    )
+
+
+def _formula_mode(args, cfg) -> str:
+    """Resolve formula mode: CLI flag wins, else config, else 'latex'."""
+    cli_val = getattr(args, "formula_mode", None)
+    if cli_val:
+        return cli_val
+    return cfg.get("formula_mode", "latex")
+
+
+def _maybe_render_formula_images(args, cfg):
+    """In 'image' mode, convert raw $...$ to PNG images via render_formulas.py.
+
+    In 'latex' mode this is a no-op — raw LaTeX is kept for the downstream
+    renderer. Returns nothing; on failure prints an error and exits.
+    """
+    if _formula_mode(args, cfg) != "image":
+        return
+    import subprocess
+    script = Path(__file__).resolve().parent.parent / "scripts" / "render_formulas.py"
+    if not script.exists():
+        print(f"❌ image 模式需要 {script}，但文件不存在。", file=sys.stderr)
+        sys.exit(2)
+    print("   🖼  公式模式 image：预渲染 $...$ 为 PNG 图片 …")
+    proc = subprocess.run(
+        [sys.executable, str(script), str(Path(args.input).resolve())],
+        capture_output=True, text=True,
+    )
+    if proc.returncode != 0:
+        print(proc.stdout)
+        print(proc.stderr, file=sys.stderr)
+        print("❌ 公式图片渲染失败，已终止。请修复 LaTeX 后重试。", file=sys.stderr)
+        sys.exit(1)
+    print(proc.stdout)
+
+
+def _run_pipeline(args, cfg, theme):
+    """Run the full 排版 pipeline: source-lint → layout → convert.
+
+    Returns ``(result, lint, report)``. Source-lint (first gate) and
+    layout (排版预处理) run before the deterministic converter, matching
+    gzh-design-skill's 双门 + 智能处理 flow adapted to this project.
+    """
+    # In image mode, pre-render raw $...$ to PNG images before lint/layout so
+    # the rest of the pipeline sees the rendered <img> references.
+    _maybe_render_formula_images(args, cfg)
+
+    src = Path(args.input).read_text(encoding="utf-8")
+
+    # ── 第一道门：源侧 lint（在排版/转换之前抓平台失效标记）──
+    lint = lint_source(src, name=args.input, formula_mode=_formula_mode(args, cfg))
+    _print_lint(lint)
+
+    # ── 排版预处理（参考 gzh-design-skill 智能处理）──
+    if not getattr(args, "no_layout", False):
+        opts = _build_layout_options(args, cfg)
+        enriched, report = layout_markdown(src, opts)
+        _print_layout_report(report)
+    else:
+        enriched, report = src, {}
+
+    converter = WeChatConverter(theme=theme, tech_enhance=getattr(args, "tech", False))
+    result = converter.convert(enriched)
+    return result, lint, report
+
+
+def _print_lint(lint: dict) -> None:
+    """Pretty-print the source-side lint result (first gate)."""
+    if lint["errors"]:
+        print(f"\n📐 源侧检查 ERROR ×{len(lint['errors'])}（建议先修复再排版）:")
+        for e in lint["errors"][:12]:
+            loc = f"L{e['line']}" if e["line"] else "—"
+            print(f"   • [{loc}] {e['message']}")
+        if len(lint["errors"]) > 12:
+            print(f"   … 其余 {len(lint['errors']) - 12} 条略")
+    if lint["warnings"]:
+        print(f"   ⚠️  源侧 WARNING ×{len(lint['warnings'])}（建议检查）")
+    if not lint["errors"] and not lint["warnings"]:
+        print("   📐 源侧检查：无问题")
+
+
+def _print_layout_report(report: dict) -> None:
+    """Pretty-print what the 排版 preprocessing changed."""
+    if not report:
+        return
+    parts = []
+    if report.get("fullwidth_punct"):
+        parts.append(f"全角标点 {report['fullwidth_punct']} 处")
+    if report.get("section_numbering"):
+        parts.append(f"章节编号 {report['section_numbering']} 处")
+    if report.get("toc"):
+        parts.append("目录导读")
+    if report.get("signature"):
+        parts.append("签名区")
+    if report.get("english_label"):
+        parts.append(f"英文标签 {report['english_label']} 处")
+    if report.get("keyword_underline"):
+        parts.append(f"关键词下划线 {report['keyword_underline']} 处")
+    if parts:
+        print(f"   ✨ 自动排版：{'; '.join(parts)}")
+
+
 def cmd_preview(args):
     """Generate HTML preview and open in browser."""
     theme = load_theme(args.theme)
-    converter = WeChatConverter(theme=theme, tech_enhance=args.tech)
-    result = converter.convert_file(args.input)
+    cfg = load_config()
+    formula_mode = _formula_mode(args, cfg)
+    result, lint, report = _run_pipeline(args, cfg, theme)
 
-    # Wrap in full HTML for browser preview
-    full_html = preview_html(result.html, theme)
+    # Wrap in full HTML for browser preview. In latex mode, inject MathJax so
+    # the raw $...$ / $$...$$ render as real math in the local browser.
+    full_html = preview_html(result.html, theme, mathjax=(formula_mode == "latex"))
 
     # Write to temp file
     input_path = Path(args.input)
@@ -56,6 +190,13 @@ def cmd_preview(args):
     print(f"Digest: {result.digest}")
     print(f"Images: {len(result.images)}")
     print(f"Output: {output}")
+
+    # Run the dual-gate validation (auto-validate after preview).
+    # NOTE: validate the WeChat fragment (result.html), not the browser
+    # preview wrapper — the wrapper legitimately uses <style>/<div> for
+    # local viewing only; only the fragment is pushed to 公众号.
+    v = validate_html(result.html, name=output, formula_mode=formula_mode)
+    _print_validation(v)
 
     if not args.no_open:
         webbrowser.open(f"file://{Path(output).absolute()}")
@@ -79,8 +220,16 @@ def cmd_publish(args):
         sys.exit(1)
 
     theme = load_theme(theme_name)
-    converter = WeChatConverter(theme=theme, tech_enhance=tech_enhance)
-    result = converter.convert_file(args.input)
+    result, lint, report = _run_pipeline(args, cfg, theme)
+
+    # Publishing must not ship content that fails the first gate
+    # (unrendered formulas, raw <div>/class=, etc. would break on paste).
+    if lint["errors"]:
+        print(f"\n❌ 源侧检查有 {len(lint['errors'])} 个 ERROR，已终止发布。"
+              f"请修复后再 publish。", file=sys.stderr)
+        sys.exit(1)
+
+    formula_mode = _formula_mode(args, cfg)
 
     print(f"Title: {result.title}")
     print(f"Digest: {result.digest}")
@@ -133,6 +282,11 @@ def cmd_publish(args):
     )
 
     print(f"\nDraft created! media_id: {draft.media_id}")
+
+    # Auto-validate the published HTML (errors would only surface after paste;
+    # catching them here saves a round-trip to the editor).
+    v = validate_html(html, name=f"<publish:{args.input}>", formula_mode=formula_mode)
+    _print_validation(v)
 
 
 def cmd_themes(args):
@@ -240,6 +394,61 @@ def cmd_learn_theme(args):
     cmd = [sys.executable, str(script), args.url, "--name", args.name]
     result = subprocess.run(cmd)
     sys.exit(result.returncode)
+
+
+def cmd_validate(args):
+    """Run the WeChat HTML compliance validator on a file."""
+    try:
+        with open(args.file, encoding="utf-8", errors="replace") as f:
+            html = f.read()
+    except OSError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(2)
+    v = validate_html(html, name=args.file)
+    _print_validation(v)
+    sys.exit(1 if v["errors"] else 0)
+
+
+def cmd_layout(args):
+    """Run the 排版 preprocessing standalone and write the enriched Markdown."""
+    cfg = load_config()
+    src = Path(args.input).read_text(encoding="utf-8")
+
+    opts = LayoutOptions(
+        fullwidth_punct=not args.no_punct,
+        section_numbering=not args.no_numbering,
+        toc=not args.no_toc,
+        signature=not args.no_signature,
+        english_label=args.english_label,
+        keyword_underline=args.keyword_underline,
+        author=args.author or cfg.get("wechat", {}).get("author") or "{{作者名}}",
+        bio=args.bio or cfg.get("bio", "{{一句话简介}}"),
+    )
+    enriched, report = layout_markdown(src, opts)
+    _print_layout_report(report)
+
+    output = args.output or str(Path(args.input).with_suffix(".layout.md"))
+    Path(output).write_text(enriched, encoding="utf-8")
+    print(f"Layout written: {output}")
+
+
+def _print_validation(v: dict) -> None:
+    """Pretty-print the validator result (shared by preview/publish/validate)."""
+    s = v["stats"]
+    print(f"   校验: {s['size_bytes']:,} B · 中文字符 {s['cjk_chars']:,} · "
+          f"图片 {s['images']}（公式 {s['formula_images']}）")
+    if v["errors"]:
+        print(f"   ❌ ERROR ×{len(v['errors'])}（必须修复）:")
+        for e in v["errors"]:
+            print(f"      • {e}")
+    if v["warnings"]:
+        print(f"   ⚠️  WARNING ×{len(v['warnings'])}（建议检查）:")
+        for w in v["warnings"]:
+            print(f"      • {w}")
+    if not v["errors"] and not v["warnings"]:
+        print("   ✅ 完全合规")
+    elif not v["errors"]:
+        print("   ✅ 无致命问题（warning 请人工确认）")
 
 
 def _gallery_sample_markdown():
@@ -380,6 +589,9 @@ def main():
     p_preview.add_argument("-o", "--output", help="Output HTML file path")
     p_preview.add_argument("--no-open", action="store_true", help="Don't open browser")
     p_preview.add_argument("--tech", action="store_true", help="Enable tech-enhance mode (register/fn/param coloring + param tables)")
+    p_preview.add_argument("--formula-mode", choices=("latex", "image"), default=None,
+                           help="公式承载方式：latex=保留原始 $...$（由下游渲染器显示，默认）；image=预渲染为 PNG 图片")
+    _add_layout_flags(p_preview)
 
     # publish
     p_publish = sub.add_parser("publish", help="Convert and publish as WeChat draft")
@@ -389,9 +601,25 @@ def main():
     p_publish.add_argument("--secret", default=None, help="WeChat AppSecret (or set in config.yaml)")
     p_publish.add_argument("--cover", help="Cover image file path")
     p_publish.add_argument("--title", help="Override article title")
-    p_publish.add_argument("--author", default=None, help="Article author")
+    p_publish.add_argument("--author", default=None, help="Article author (also used in signature area)")
     p_publish.add_argument("--digest", default=None, help="Override article digest (≤120 UTF-8 bytes)")
     p_publish.add_argument("--tech", action="store_true", help="Enable tech-enhance mode (auto-on when config mode=tech)")
+    p_publish.add_argument("--formula-mode", choices=("latex", "image"), default=None,
+                           help="公式承载方式：latex=保留原始 $...$（默认）；image=预渲染为 PNG 图片")
+    _add_layout_flags(p_publish)
+
+    # layout（独立排版预处理）
+    p_layout = sub.add_parser("layout", help="Run 排版 preprocessing on a Markdown file (auto-number / TOC / signature / fullwidth punct)")
+    p_layout.add_argument("input", help="Markdown file path")
+    p_layout.add_argument("-o", "--output", help="Output enriched Markdown path (default: <input>.layout.md)")
+    p_layout.add_argument("--author", default=None, help="Signature-area author (default: {{作者名}} placeholder)")
+    p_layout.add_argument("--bio", default=None, help="Signature-area one-line bio")
+    p_layout.add_argument("--no-punct", action="store_true", help="Disable full-width punctuation normalization")
+    p_layout.add_argument("--no-numbering", action="store_true", help="Disable section auto-numbering")
+    p_layout.add_argument("--no-toc", action="store_true", help="Disable TOC / 导读 card")
+    p_layout.add_argument("--no-signature", action="store_true", help="Disable trailing signature area")
+    p_layout.add_argument("--english-label", action="store_true", help="Add English eyebrow labels to ## headings")
+    p_layout.add_argument("--keyword-underline", action="store_true", help="Underline **bold** phrases (experimental)")
 
     # themes
     sub.add_parser("themes", help="List available themes")
@@ -415,6 +643,10 @@ def main():
     p_learn.add_argument("url", help="WeChat article URL")
     p_learn.add_argument("--name", required=True, help="Theme name")
 
+    # validate
+    p_val = sub.add_parser("validate", help="Validate a WeChat HTML file for platform compliance (dual-gate QA)")
+    p_val.add_argument("file", help="HTML file to validate")
+
     args = parser.parse_args()
 
     try:
@@ -430,6 +662,10 @@ def main():
             cmd_gallery(args)
         elif args.command == "learn-theme":
             cmd_learn_theme(args)
+        elif args.command == "validate":
+            cmd_validate(args)
+        elif args.command == "layout":
+            cmd_layout(args)
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)

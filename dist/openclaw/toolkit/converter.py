@@ -15,6 +15,37 @@ from bs4 import BeautifulSoup
 
 from theme import Theme, load_theme, get_inline_css_rules
 
+# ── Math ($...$ / $$...$$) protection ────────────────────────────────────────
+# python-markdown would mangle LaTeX containing _ * \ inside $...$ (e.g.
+# U_{busy} → U<em>busy</em>, or \frac eaten). We stash each formula in a
+# placeholder that markdown leaves untouched, then restore the raw LaTeX
+# verbatim after parsing — so a downstream MathJax/KaTeX renderer shows it
+# exactly as written.
+_MATH_RE = re.compile(r"\$\$.+?\$\$|\$[^$\n]+?\$", re.DOTALL)
+
+
+def _protect_math(text: str) -> tuple[str, list[str]]:
+    """Replace $...$ / $$...$$ with inert placeholders; return (text, store)."""
+    store: list[str] = []
+
+    def _stash(m: re.Match) -> str:
+        store.append(m.group(0))
+        return f"zmathph{len(store) - 1}z"
+
+    return _MATH_RE.sub(_stash, text), store
+
+
+def _restore_math(html: str, store: list[str]) -> str:
+    """Put the raw LaTeX back where its placeholder sits."""
+    if not store:
+        return html
+
+    def _unstash(m: re.Match) -> str:
+        idx = int(m.group(1))
+        return store[idx] if 0 <= idx < len(store) else m.group(0)
+
+    return re.sub(r"zmathph(\d+)z", _unstash, html)
+
 
 @dataclass
 class ConvertResult:
@@ -66,6 +97,24 @@ class WeChatConverter:
         "#00a000": "#aceabb",
     }
 
+    # Beautiful code-card palette. Light values are used as the normal inline
+    # style; the matching dark values are mirrored onto data-darkmode-*
+    # attributes so the card also looks right when WeChat's dark mode is on.
+    _CODE_CARD = {
+        # light (normal, GitHub-ish)
+        "border": "#d0d7de",
+        "header_bg": "#eaeef2",
+        "header_fg": "#57606a",
+        "code_bg": "#f6f8fa",
+        "code_fg": "#24292f",
+        # dark (WeChat dark mode)
+        "dm_border": "#30363d",
+        "dm_header_bg": "#161b22",
+        "dm_header_fg": "#8b949e",
+        "dm_code_bg": "#0d1117",
+        "dm_code_fg": "#c9d1d9",
+    }
+
     def __init__(
         self,
         theme: Optional[Theme] = None,
@@ -98,8 +147,23 @@ class WeChatConverter:
         # CJK fix: auto-space between CJK and Latin characters
         markdown_text = self._fix_cjk_spacing(markdown_text)
 
-        # Parse Markdown → HTML
-        html = self._markdown_to_html(markdown_text)
+        # Protect $...$ / $$...$$ from markdown's emphasis/escape processing,
+        # parse to HTML, then restore the raw LaTeX verbatim (so $U_{busy}$
+        # and $\frac{a}{b}$ survive intact for a downstream renderer).
+        protected, math_store = _protect_math(markdown_text)
+        html = self._markdown_to_html(protected)
+        html = _restore_math(html, math_store)
+
+        # Annotate fenced code blocks with their language. codehilite (with
+        # noclasses) strips the ``language-*`` class from <code>, so we recover
+        # the language from the source fence order and pair it to the <pre>
+        # elements in document order. This drives the code-card header label.
+        html = self._annotate_code_langs(markdown_text, html)
+
+        # Convert <u>...</u> (keyword underline from layout / author) into a
+        # real underline span — WeChat strips bare <u>, but inline
+        # text-decoration survives. Done right after parse, before styling.
+        html = self._convert_underline(html)
 
         # Enhance code blocks (add data-lang attribute)
         html = self._enhance_code_blocks(html)
@@ -132,6 +196,18 @@ class WeChatConverter:
 
         # Apply GitHub-like syntax highlighting colors (after dark mode so data-darkmode-* attrs exist)
         html = self._apply_github_code_highlight(html)
+
+        # Wrap code blocks in beautiful cards (after colors so the card frames
+        # the already-highlighted code; before the unsupported-tag strip so the
+        # original <div class="codehilite">> is replaced, not converted).
+        html = self._build_code_cards(html)
+
+        # Final WeChat-compat pass: the published fragment must contain no
+        # <div> (WeChat rewrites it) and no class= (WeChat strips it). The
+        # codehilite extension emits <div class="codehilite"> and fenced code
+        # adds class="language-*"; both are converted to <section> + inline
+        # styles we already emit, so stripping is lossless for rendering.
+        html = self._strip_unsupported_tags(html)
 
         # Generate digest from plain text
         digest = self._generate_digest(html)
@@ -187,6 +263,45 @@ class WeChatConverter:
         md = markdown.Markdown(extensions=extensions, extension_configs=extension_configs)
         return md.convert(text)
 
+    def _convert_underline(self, html: str) -> str:
+        """Turn ``<u>text</u>`` into an inline underline span.
+
+        WeChat's editor strips bare ``<u>`` tags, but an inline
+        ``text-decoration: underline`` span survives paste. The layout stage
+        (or the author) emits ``<u>``; this normalizes it so underlines render.
+        """
+        return re.sub(
+            r"<u>(.*?)</u>",
+            r'<span style="text-decoration: underline;">\1</span>',
+            html,
+            flags=re.DOTALL,
+        )
+
+    def _annotate_code_langs(self, md_text: str, html: str) -> str:
+        """Recover fenced-code languages from the markdown and tag each ``<pre>``.
+
+        codehilite (noclasses) drops the ``language-*`` class, so the language
+        is lost by the time we build the code card. We read the fence info
+        strings (```` ```python ````) from the source, in document order, and
+        set ``data-lang`` on the matching ``<pre>`` elements (also in order).
+        """
+        langs: list[str] = []
+        for m in re.finditer(r"```[ \t]*([A-Za-z0-9_+\-]+)?", md_text):
+            lang = (m.group(1) or "").lower()
+            # Only count opening fences that declare a language; bare/closing
+            # fences (no language token) are ignored so the pairing with <pre>
+            # elements (which only exist for real code blocks) stays aligned.
+            if lang:
+                langs.append(lang)
+        if not langs:
+            return html
+        soup = BeautifulSoup(html, "html.parser")
+        pres = soup.find_all("pre")
+        for pre, lang in zip(pres, langs):
+            if lang:
+                pre["data-lang"] = lang
+        return str(soup)
+
     def _enhance_code_blocks(self, html: str) -> str:
         """Add data-lang attribute to <pre> elements for language labeling."""
         soup = BeautifulSoup(html, "html.parser")
@@ -197,6 +312,80 @@ class WeChatConverter:
                     if cls.startswith("language-"):
                         pre["data-lang"] = cls.replace("language-", "")
                         break
+        return str(soup)
+
+    def _build_code_cards(self, html: str) -> str:
+        """Wrap each ``<pre>`` (from codehilite) into a beautiful code card.
+
+        GitHub-style card: a header bar with mac-style traffic-light dots and
+        the language label, plus a rounded, padded, monospaced body. All styling
+        is inline (no ``class``/``<div>``) and the card carries ``data-darkmode-*``
+        attributes so it also looks right in WeChat's dark mode.
+
+        The original ``<div class="codehilite">`` wrapper is replaced by the
+        card, so the downstream ``_strip_unsupported_tags`` pass has nothing to
+        convert.
+        """
+        soup = BeautifulSoup(html, "html.parser")
+        c = self._CODE_CARD
+        font_stack = ("-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'PingFang SC',"
+                      "'Microsoft YaHei',sans-serif")
+        mono_stack = ("'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace")
+
+        for div in soup.find_all("div", class_="codehilite"):
+            pre = div.find("pre")
+            if pre is None:
+                continue
+            lang = (pre.get("data-lang") or "code").upper()
+
+            # Header: three mac dots + language label.
+            header = soup.new_tag("section")
+            header["style"] = (
+                f"background:{c['header_bg']};padding:9px 14px;font-size:12px;"
+                f"color:{c['header_fg']};font-family:{font_stack};letter-spacing:.4px;"
+            )
+            header["data-darkmode-bgcolor"] = c["dm_header_bg"]
+            header["data-darkmode-color"] = c["dm_header_fg"]
+            for dot_color in ("#ff5f56", "#ffbd2e", "#27c93f"):
+                dot = soup.new_tag("span")
+                dot["style"] = (
+                    "display:inline-block;width:9px;height:9px;border-radius:50%;"
+                    f"background:{dot_color};margin-right:6px;vertical-align:middle;"
+                )
+                header.append(dot)
+            label = soup.new_tag("span")
+            label["style"] = "font-weight:600;vertical-align:middle;"
+            label.string = lang
+            header.append(label)
+
+            # Body: the original <pre>, re-styled, inside a padded section.
+            pre.extract()
+            pre_style = pre.get("style", "")
+            pre["style"] = (
+                f"{pre_style};margin:0;padding:0;background:transparent;"
+                f"font-family:{mono_stack};font-size:13px;line-height:1.75;"
+                f"color:{c['code_fg']};"
+            )
+            pre["data-darkmode-color"] = c["dm_code_fg"]
+            pre["data-darkmode-bgcolor"] = "transparent"
+            body = soup.new_tag("section")
+            body["style"] = (
+                f"background:{c['code_bg']};padding:14px 16px;overflow-x:auto;"
+            )
+            body["data-darkmode-bgcolor"] = c["dm_code_bg"]
+            body.append(pre)
+
+            # Card shell.
+            card = soup.new_tag("section")
+            card["style"] = (
+                f"border:1px solid {c['border']};border-radius:10px;overflow:hidden;"
+                f"margin:1.6em 0;background:{c['code_bg']};"
+            )
+            card["data-darkmode-bgcolor"] = c["dm_code_bg"]
+            card.append(header)
+            card.append(body)
+            div.replace_with(card)
+
         return str(soup)
 
     def _apply_github_code_highlight(self, html: str) -> str:
@@ -276,11 +465,34 @@ class WeChatConverter:
                         style_dict[prop] = val
 
                 # Inline formula images (from render_formulas.py) carry explicit
-                # sizing and must stay in the text flow — don't apply block-level
-                # theme img rules (display/margin) to them.
-                if elem.name == "img" and "height:" in existing:
-                    style_dict.pop("display", None)
-                    style_dict.pop("margin", None)
+                # sizing and must stay in the text flow. The renderer set
+                # `display:inline-block` + a baseline `vertical-align` + a small
+                # horizontal `margin`; we must KEEP those, or the theme's generic
+                # ``img { display:block; margin:24px auto }`` rule (applied in
+                # the loop below) will overwrite them and push inline formulas
+                # onto their own line mid-sentence. Block formulas are
+                # identified by the explicit `display:block` their renderer set.
+                if elem.name == "img":
+                    norm = existing.replace(" ", "")
+                    is_block_formula = "display:block" in norm
+                    has_height = "height:" in norm
+                    if has_height and not is_block_formula:
+                        # Inline formula: keep the renderer's text-flow values
+                        # (display:inline-block, margin:0 .12em, vertical-align)
+                        # so the theme rule cannot flip it to display:block.
+                        # Only drop the cosmetic border-radius the theme adds
+                        # to every <img> — a rounded formula image looks like
+                        # a sticker, not math.
+                        style_dict["display"] = "inline-block"
+                        style_dict.setdefault("margin", "0 .12em")
+                        style_dict.pop("border-radius", None)
+                    elif is_block_formula:
+                        # Block formula: keep the renderer's display/margin.
+                        # Just drop the rounded corners (math shouldn't be
+                        # rounded — it should look like printed equations).
+                        style_dict.setdefault("display", "block")
+                        style_dict.setdefault("margin", "1.2em auto")
+                        style_dict.pop("border-radius", None)
 
                 elem["style"] = "; ".join(f"{k}: {v}" for k, v in style_dict.items())
 
@@ -307,6 +519,23 @@ class WeChatConverter:
             if "white-space" not in style:
                 pre["style"] = f"{style}; white-space: pre-wrap; word-wrap: break-word" if style else "white-space: pre-wrap; word-wrap: break-word"
 
+        return str(soup)
+
+    def _strip_unsupported_tags(self, html: str) -> str:
+        """Convert <div>→<section> and drop class= from the published fragment.
+
+        WeChat rewrites ``<div>`` and strips ``class`` attributes on paste, so
+        any such markup in the fragment would silently lose its styling. We
+        already emit inline styles everywhere, so renaming to ``<section>`` and
+        deleting ``class`` is visually lossless while keeping the fragment
+        within WeChat's allowed tag/attribute set.
+        """
+        soup = BeautifulSoup(html, "html.parser")
+        for tag in soup.find_all("div"):
+            tag.name = "section"
+        for tag in soup.find_all(True):
+            if tag.has_attr("class"):
+                del tag["class"]
         return str(soup)
 
     # -- tech-enhance inline code / param tables --
@@ -398,13 +627,24 @@ class WeChatConverter:
 
         WeChat renders CJK-Latin without spacing, making mixed text hard to read.
         This inserts a thin space (U+200A) at CJK↔Latin boundaries.
-        Runs on raw Markdown before parsing, skipping code blocks and links.
+        Runs on raw Markdown before parsing, skipping code blocks, links, and
+        **math regions** (``$...$`` / ``$$...$$``) — a thin space inside a
+        formula would break downstream MathJax/KaTeX delimiters.
         """
         # CJK unicode ranges
         cjk = r'[\u4e00-\u9fff\u3400-\u4dbf\u3000-\u303f\uff00-\uffef]'
         latin = r'[A-Za-z0-9]'
 
-        lines = text.split('\n')
+        # Protect math regions so the spacing rules never touch their contents.
+        math_store: list[str] = []
+
+        def _stash(m: re.Match) -> str:
+            math_store.append(m.group(0))
+            return f"\x00MATH{len(math_store) - 1}\x00"
+
+        protected = re.sub(r"\$\$.+?\$\$|\$[^$\n]+?\$", _stash, text, flags=re.DOTALL)
+
+        lines = protected.split('\n')
         result = []
         in_code_block = False
 
@@ -423,7 +663,11 @@ class WeChatConverter:
             line = re.sub(f'({latin})({cjk})', r'\1 \2', line)
             result.append(line)
 
-        return '\n'.join(result)
+        out = '\n'.join(result)
+        # Restore math regions verbatim.
+        out = re.sub(r"\x00MATH(\d+)\x00",
+                     lambda m: math_store[int(m.group(1))], out)
+        return out
 
     def _fix_cjk_bold_punctuation(self, html: str) -> str:
         """Move Chinese punctuation outside bold/strong tags.
@@ -683,6 +927,8 @@ class WeChatConverter:
         """Generate a digest that fits within WeChat's byte limit (120 bytes UTF-8)."""
         soup = BeautifulSoup(html, "html.parser")
         text = soup.get_text(separator=" ", strip=True)
+        # Drop raw LaTeX ($...$ / $$...$$) so the summary reads as prose.
+        text = re.sub(r"\$\$.+?\$\$|\$[^$\n]+?\$", "", text, flags=re.DOTALL)
         text = re.sub(r"\s+", " ", text).strip()
 
         # Truncate to fit within max_bytes (UTF-8)
@@ -699,11 +945,30 @@ class WeChatConverter:
         return truncated + ellipsis
 
 
-def preview_html(body_html: str, theme: Theme) -> str:
+def preview_html(body_html: str, theme: Theme, mathjax: bool = False) -> str:
     """
     Wrap body content in a full HTML document for browser preview.
     This is only for local preview — NOT for WeChat publishing.
+
+    ``mathjax``: when True (latex formula mode), inject MathJax so raw
+    ``$...$`` / ``$$...$$`` render as real math in the browser preview. This
+    makes the local preview show formulas naturally; the WeChat fragment
+    itself still carries the raw LaTeX for the downstream renderer.
     """
+    mathjax_script = ""
+    if mathjax:
+        mathjax_script = (
+            "\n    <!-- MathJax: render raw $...$ / $$...$$ as math (preview only) -->\n"
+            "    <script>\n"
+            "      window.MathJax = {\n"
+            "        tex: { inlineMath: [['$', '$'], ['\\\\(', '\\\\)']],\n"
+            "              displayMath: [['$$', '$$'], ['\\\\[', '\\\\]']] },\n"
+            "        svg: { fontCache: 'global' }\n"
+            "      };\n"
+            "    </script>\n"
+            "    <script id=\"MathJax-script\" async\n"
+            "      src=\"https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js\"></script>\n"
+        )
     return f"""<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -712,7 +977,7 @@ def preview_html(body_html: str, theme: Theme) -> str:
     <title>Preview</title>
     <style>
 {theme.base_css}
-    </style>
+    </style>{mathjax_script}
 </head>
 <body>
     {body_html}
