@@ -317,14 +317,30 @@ class WeChatConverter:
     def _build_code_cards(self, html: str) -> str:
         """Wrap each ``<pre>`` (from codehilite) into a beautiful code card.
 
-        GitHub-style card: a header bar with mac-style traffic-light dots and
-        the language label, plus a rounded, padded, monospaced body. All styling
-        is inline (no ``class``/``<div>``) and the card carries ``data-darkmode-*``
-        attributes so it also looks right in WeChat's dark mode.
+        GitHub-style card: a header bar with mac-style traffic-light dots
+        and the language label, plus a rounded, padded, monospaced body.
+        All styling is inline (no ``class``/``<div>``) and the card carries
+        ``data-darkmode-*`` attributes so it also looks right in WeChat's
+        dark mode.
 
-        The original ``<div class="codehilite">`` wrapper is replaced by the
-        card, so the downstream ``_strip_unsupported_tags`` pass has nothing to
-        convert.
+        Output structure (flat, ``<section>`` outer + ``<p>`` slices)::
+
+            <section style="card-shell">
+              <p style="header">[red][yellow][green] LANG</p>
+              <p style="body"><pre><code>...</code></pre></p>
+            </section>
+
+        Why ``<p>`` for header/body instead of nested ``<section>``:
+        WeChat's editor treats each top-level ``<section>`` as its own
+        paragraph; nesting two ``<section>``s under one card turns the
+        header into a tiny "YAML" paragraph followed by the code, with
+        a visible gap between them — visibly broken. ``<p>`` slices inside
+        a single ``<section>`` shell render as one continuous card with
+        the header on top and the code below it.
+
+        The original ``<div class="codehilite">`` wrapper is replaced by
+        the card, so the downstream ``_strip_unsupported_tags`` pass has
+        nothing to convert.
         """
         soup = BeautifulSoup(html, "html.parser")
         c = self._CODE_CARD
@@ -339,10 +355,11 @@ class WeChatConverter:
             lang = (pre.get("data-lang") or "code").upper()
 
             # Header: three mac dots + language label.
-            header = soup.new_tag("section")
+            header = soup.new_tag("p")
             header["style"] = (
-                f"background:{c['header_bg']};padding:9px 14px;font-size:12px;"
-                f"color:{c['header_fg']};font-family:{font_stack};letter-spacing:.4px;"
+                f"margin:0;background:{c['header_bg']};padding:9px 14px;"
+                f"font-size:12px;color:{c['header_fg']};"
+                f"font-family:{font_stack};letter-spacing:.4px;"
             )
             header["data-darkmode-bgcolor"] = c["dm_header_bg"]
             header["data-darkmode-color"] = c["dm_header_fg"]
@@ -358,32 +375,62 @@ class WeChatConverter:
             label.string = lang
             header.append(label)
 
-            # Body: the original <pre>, re-styled, inside a padded section.
-            pre.extract()
-            pre_style = pre.get("style", "")
+            # Strip the chip-cosmetic style the theme applied to the inner
+            # ``<code>`` (padding / background / border-radius / border /
+            # font-size / color / font-family). Without this the theme's
+            # ``code`` rule paints every line of code as a separate sticker
+            # inside the card, which WeChat then renders as broken text.
+            code = pre.find("code")
+            if code is not None:
+                existing = code.get("style", "")
+                style_dict = {}
+                if existing:
+                    for item in existing.split(";"):
+                        if ":" in item:
+                            k, v = item.split(":", 1)
+                            style_dict[k.strip()] = v.strip()
+                for k in ("padding", "background", "border-radius", "border",
+                         "color", "font-size", "font-family"):
+                    style_dict.pop(k, None)
+                style_dict["background"] = "transparent"
+                style_dict["padding"] = "0"
+                style_dict["border-radius"] = "0"
+                style_dict["border"] = "0"
+                style_dict["font-size"] = "13px"
+                style_dict["font-family"] = mono_stack
+                style_dict["color"] = c["code_fg"]
+                code["style"] = "; ".join(f"{k}: {v}" for k, v in style_dict.items())
+                code["data-darkmode-color"] = c["dm_code_fg"]
+
+            # Pre style: code background + padding + monospace, but no
+            # border-radius (the outer card provides the rounded corners
+            # via ``overflow:hidden``). ``white-space:pre`` (NOT pre-wrap)
+            # so code indentation is preserved exactly as written; long
+            # lines overflow horizontally (overflow-x:auto) instead of
+            # being mangled.
             pre["style"] = (
-                f"{pre_style};margin:0;padding:0;background:transparent;"
-                f"font-family:{mono_stack};font-size:13px;line-height:1.75;"
-                f"color:{c['code_fg']};"
+                f"margin:0;padding:12px 16px;background:{c['code_bg']};"
+                f"font-family:{mono_stack};font-size:13px;line-height:1.7;"
+                f"color:{c['code_fg']};border-radius:0;white-space:pre;"
+                f"word-wrap:normal;overflow-x:auto;border:0;"
             )
             pre["data-darkmode-color"] = c["dm_code_fg"]
             pre["data-darkmode-bgcolor"] = "transparent"
-            body = soup.new_tag("section")
-            body["style"] = (
-                f"background:{c['code_bg']};padding:14px 16px;overflow-x:auto;"
-            )
-            body["data-darkmode-bgcolor"] = c["dm_code_bg"]
-            body.append(pre)
 
-            # Card shell.
+            # Card shell — a single <section> with TWO direct children: a
+            # <p> header (mac dots + language label) and a <pre> body.
+            # We deliberately avoid wrapping the pre in a body <p>, because
+            # WeChat's editor splits nested <section><p><p><pre> chains
+            # into separate visual blocks; a flat <section><p><pre> is
+            # what WeChat keeps as one logical code card.
             card = soup.new_tag("section")
             card["style"] = (
-                f"border:1px solid {c['border']};border-radius:10px;overflow:hidden;"
-                f"margin:1.6em 0;background:{c['code_bg']};"
+                f"border:1px solid {c['border']};border-radius:8px;"
+                f"overflow:hidden;margin:1.6em 0;background:{c['code_bg']};"
             )
             card["data-darkmode-bgcolor"] = c["dm_code_bg"]
             card.append(header)
-            card.append(body)
+            card.append(pre)
             div.replace_with(card)
 
         return str(soup)
@@ -435,66 +482,141 @@ class WeChatConverter:
         return str(soup), images
 
     def _apply_inline_styles(self, html: str) -> str:
-        """Apply theme CSS rules as inline styles on matching elements."""
+        """Apply theme CSS rules as inline styles on matching elements.
+
+        Special handling:
+        - ``pre code`` selector is allowed to **override** the cosmetic
+          properties (``padding``, ``background``, ``border-radius``,
+          ``border``, ``color``, ``font-size``, ``font-family``) that the
+          bare ``code`` selector would otherwise paint onto block-code
+          embedded ``<code>`` tokens. Without this, a tech-pro / linear
+          etc. theme would render every code block as a row of sticker-like
+          tokens with padding and a rounded background — visually broken.
+        - Formula ``<img>`` keep the precise sizing the renderer emitted
+          (``display:inline-block``/``display:block``, ``height``, vertical
+          baseline alignment, ``max-width``); the bare ``img`` selector is
+          not allowed to override those.
+        """
         soup = BeautifulSoup(html, "html.parser")
 
+        # Properties that the ``pre code`` selector can override on the
+        # bare ``code`` selector — i.e. those the theme uses to make inline
+        # ``<code>`` look like highlighted chips. When ``pre code`` fires,
+        # the bare-chips look must be cleared on block-code embeds.
+        _PRE_CODE_OVERRIDE = {
+            "padding", "background", "border-radius", "border",
+            "color", "font-size", "font-family",
+        }
+
+        # First pass: apply selectors in declared order, but remember which
+        # elements a later selector touched so the bare ``code`` selector's
+        # cosmetic props can be cleared afterwards.
+        pre_code_touched: set[int] = set()
         for selector, styles in self._css_rules.items():
-            # Skip body — we don't wrap in body tag
             if selector.strip() == "body":
                 continue
-
             try:
                 elements = soup.select(selector)
             except Exception:
                 continue
-
             for elem in elements:
+                # ``pre code`` wins over a prior ``code`` for these properties
+                if selector == "pre code":
+                    pre_code_touched.add(id(elem))
+                    existing = elem.get("style", "")
+                    style_dict = {}
+                    if existing:
+                        for item in existing.split(";"):
+                            if ":" in item:
+                                k, v = item.split(":", 1)
+                                style_dict[k.strip()] = v.strip()
+                    # Strip chip-cosmetic props, then apply ``pre code`` fully.
+                    for k in _PRE_CODE_OVERRIDE:
+                        style_dict.pop(k, None)
+                    for prop, val in styles.items():
+                        style_dict[prop] = val
+                    elem["style"] = "; ".join(f"{k}: {v}" for k, v in style_dict.items())
+                    continue
+
                 existing = elem.get("style", "")
                 style_dict = {}
-
-                # Parse existing inline styles
                 if existing:
                     for item in existing.split(";"):
                         if ":" in item:
                             key, val = item.split(":", 1)
                             style_dict[key.strip()] = val.strip()
 
-                # Add theme styles (existing styles take precedence)
                 for prop, val in styles.items():
                     if prop not in style_dict:
                         style_dict[prop] = val
 
-                # Inline formula images (from render_formulas.py) carry explicit
+                # Formula images (from render_formulas.py) carry explicit
                 # sizing and must stay in the text flow. The renderer set
-                # `display:inline-block` + a baseline `vertical-align` + a small
-                # horizontal `margin`; we must KEEP those, or the theme's generic
-                # ``img { display:block; margin:24px auto }`` rule (applied in
-                # the loop below) will overwrite them and push inline formulas
-                # onto their own line mid-sentence. Block formulas are
-                # identified by the explicit `display:block` their renderer set.
+                # ``height:20px;width:auto`` for inline (absolute pixels —
+                # not em, because WeChat ignores em on <img>), or
+                # ``display:block;max-width:96%`` for block math. We KEEP
+                # those, or the theme's generic ``img`` rule will overwrite
+                # them and break layout. Block formulas are identified by
+                # the explicit ``display:block`` their renderer set.
+                #
+                # ``border:0`` must be enforced here too: WeChat's editor
+                # auto-adds a gray border to every <img>, and a bordered
+                # formula image looks like a UI sticker, not math.
                 if elem.name == "img":
                     norm = existing.replace(" ", "")
                     is_block_formula = "display:block" in norm
                     has_height = "height:" in norm
                     if has_height and not is_block_formula:
-                        # Inline formula: keep the renderer's text-flow values
-                        # (display:inline-block, margin:0 .12em, vertical-align)
-                        # so the theme rule cannot flip it to display:block.
-                        # Only drop the cosmetic border-radius the theme adds
-                        # to every <img> — a rounded formula image looks like
-                        # a sticker, not math.
-                        style_dict["display"] = "inline-block"
-                        style_dict.setdefault("margin", "0 .12em")
+                        # Inline formula: keep the renderer's text-flow
+                        # values (display:inline, fixed-px height, small
+                        # horizontal margin, vertical-align). Drop the
+                        # rounded corners the theme adds to every <img>.
+                        style_dict["display"] = "inline"
+                        style_dict["height"] = "20px"
+                        style_dict["width"] = "auto"
+                        style_dict["vertical-align"] = "-3px"
+                        style_dict["margin"] = "0 3px 0 0"
+                        style_dict["border"] = "0"
                         style_dict.pop("border-radius", None)
                     elif is_block_formula:
-                        # Block formula: keep the renderer's display/margin.
-                        # Just drop the rounded corners (math shouldn't be
-                        # rounded — it should look like printed equations).
-                        style_dict.setdefault("display", "block")
-                        style_dict.setdefault("margin", "1.2em auto")
+                        # Block formula: keep the renderer's
+                        # display/margin, drop rounded corners, kill the
+                        # border WeChat auto-adds.
+                        style_dict["display"] = "block"
+                        style_dict["margin"] = "1.2em auto"
+                        style_dict["max-width"] = "96%"
+                        style_dict["width"] = "auto"
+                        style_dict["height"] = "auto"
+                        style_dict["border"] = "0"
                         style_dict.pop("border-radius", None)
 
                 elem["style"] = "; ".join(f"{k}: {v}" for k, v in style_dict.items())
+
+        # Second pass: drop the chip-cosmetic props from any ``<code>``
+        # inside a ``<pre>`` that ``pre code`` may have left in the dict
+        # because the prop was absent in the rule (defensive: clears any
+        # leftover ``background``/``padding``/``border-radius`` from the
+        # ``code`` pass).
+        for code in soup.find_all("code"):
+            parent = code.parent
+            if not parent or parent.name != "pre":
+                continue
+            style = code.get("style", "")
+            if not style:
+                continue
+            new_items = []
+            for item in style.split(";"):
+                if ":" not in item:
+                    continue
+                k = item.split(":", 1)[0].strip()
+                if k in _PRE_CODE_OVERRIDE:
+                    continue
+                new_items.append(item)
+            new_style = "; ".join(new_items).strip("; ")
+            if new_style:
+                code["style"] = new_style
+            else:
+                del code["style"]
 
         return str(soup)
 

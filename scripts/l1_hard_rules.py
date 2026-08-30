@@ -337,38 +337,148 @@ def scan_analogy_limitation(text):
             hits.append({"rule": "analogy_limitation", "position": m.start(), "warning": "类比缺少局限性标注", "context": text[max(0,m.start()-10):end_pos]})
     return hits
 
+COMMON_ACRONYMS = frozenset([
+    'AI', 'OK', 'UI', 'UX', 'API', 'CPU', 'GPU', 'OS', 'PC', 'IP', 'ID', 'IO', 'CLI', 'SDK',
+    'GB', 'MB', 'KB', 'TB', 'PB', 'Hz', 'MHz', 'GHz', 'KHz',
+    'HTTP', 'HTTPS', 'TCP', 'UDP', 'DNS', 'DHCP',
+    'JSON', 'XML', 'YAML', 'TOML', 'CSV',
+    'HTML', 'CSS', 'JS', 'TS', 'JSX', 'TSX',
+    'SSH', 'SSL', 'TLS', 'FTP', 'SFTP',
+    'UTF', 'ASCII', 'BASE64', 'SHA', 'AES', 'RSA',
+    'UUID', 'GUID', 'JWT', 'OAuth', 'CORS', 'REST',
+    'MCP', 'LLM', 'RAG', 'LSP', 'IDE',
+    'DB', 'SQL', 'NoSQL', 'ORM', 'CRUD',
+    'CI', 'CD', 'DevOps', 'QA', 'PR', 'WIP',
+    'NaN', 'Inf', 'null', 'None', 'True', 'False',
+    'stdin', 'stdout', 'stderr',
+    'GET', 'POST', 'PUT', 'PATCH', 'DELETE',
+    'GRANT', 'REVOKE', 'SELECT', 'INSERT', 'UPDATE', 'CREATE', 'ALTER', 'DROP', 'TRUNCATE',
+    'MAX', 'MIN', 'AVG', 'SUM', 'COUNT',
+    'VScode', 'VSCode', 'IntelliJ', 'PyCharm',
+])
+
+# 专有名词/产品名/厂商名：不强制标注全称（示例列表里出现时不算术语违规）
+PROPER_NOUN_ACRONYMS = frozenset([
+    'NVIDIA', 'AMD', 'INTEL', 'IBM', 'H100', 'TDX', 'SEV', 'CC',
+])
+
+# 行内代码中的标识符（寄存器名/指令助记符等）不参与缩写扫描
+INLINE_CODE_RE = re.compile(r'`[^`]*`')
+
+
+# 行话类英文词：正文出现时必须有中文解释，或登记在文末术语对照表
+TERMINOLOGY_JARGON = [
+    "prompt", "token", "tensor", "shape", "profiling", "cache",
+    "beam", "prefix", "enclave", "latency", "throughput",
+    "batch", "prefill", "decode", "batching",
+]
+
+
+def _has_gloss(text, term):
+    """Check whether term has a gloss anywhere in the body.
+
+    Backstop semantics: the script confirms a gloss exists SOMEWHERE
+    (inline first-use, 表注, or glossary row). 首次出现位置纪律由 L0-4/L1-5
+    人工复核，脚本只拦截"全文从未解释"。
+
+    Recognized gloss forms:
+      - 中文（TERM） / 中文（TERM，解释）
+      - 中文（English words TERM）
+      - TERM（英文全称）
+      - TERM 全称 ... / TERM 指/即/是中文
+      - TERM，中文
+      - TERM，英文全称，即中文（TPOT，Time Per Output Token，即…）
+    """
+    g = re.escape(term)
+    signals = [
+        r'[\u4e00-\u9fff]\s*[（(]\s*' + g,                        # 中文（TERM
+        r'[\u4e00-\u9fff]\s*[（(][a-zA-Z\s\-]*' + g,              # 中文（English TERM
+        g + r'\s*[（(]',                                          # TERM（全称
+        g + r'\s*全称',                                            # TERM 全称
+        g + r'\s*(?:指|即|是)[\u4e00-\u9fff]',                     # TERM 指/即/是中文
+        g + r'[，,]\s*[\u4e00-\u9fff]',                           # TERM，中文
+        g + r'[，,][^。]{0,60}(?:即|指|是)[\u4e00-\u9fff]',          # TERM，英文全称，即中文
+    ]
+    return any(re.search(sig, text) for sig in signals)
+
+
 def scan_acronym_first_use(text):
-    """Scan for uppercase acronyms that might need full-name annotation."""
-    acronyms = set(re.findall(r'\b([A-Z]{2,8})\b', text))
+    """缩写全文必须有全称/中文解释（任意一处解释即通过，表注也算）。
+
+    参考文献区不参与扫描。专有名词（NVIDIA/H100/TDX 等）豁免。
+    """
+    body = re.split(r'#{1,3}\s*参考文献', text)[0]
+    body = strip_code_blocks(body)
+    body = INLINE_CODE_RE.sub(' ', body)  # 行内代码（寄存器名/指令）不参与缩写扫描
+    acronyms = set(re.findall(r'\b([A-Z]{2,8})\b', body))
     hits = []
     for acr in sorted(acronyms):
-        # Skip common tech/measurement acronyms
-        if acr in ('AI', 'OK', 'UI', 'UX', 'API', 'CPU', 'GPU', 'OS', 'PC', 'IP', 'ID', 'IO', 'CLI', 'SDK',
-                    'GB', 'MB', 'KB', 'TB', 'PB', 'Hz', 'MHz', 'GHz', 'KHz',
-                    'HTTP', 'HTTPS', 'TCP', 'UDP', 'DNS', 'DHCP',
-                    'JSON', 'XML', 'YAML', 'TOML', 'CSV',
-                    'HTML', 'CSS', 'JS', 'TS', 'JSX', 'TSX',
-                    'SSH', 'SSL', 'TLS', 'FTP', 'SFTP',
-                    'UTF', 'ASCII', 'BASE64', 'SHA', 'AES', 'RSA',
-                    'UUID', 'GUID', 'JWT', 'OAuth', 'CORS', 'REST',
-                    'MCP', 'LLM', 'RAG', 'LSP', 'IDE',
-                    'DB', 'SQL', 'NoSQL', 'ORM', 'CRUD',
-                    'CI', 'CD', 'DevOps', 'QA', 'PR', 'WIP',
-                    'NaN', 'Inf', 'null', 'None', 'True', 'False',
-                    'stdin', 'stdout', 'stderr',
-                    'GET', 'POST', 'PUT', 'PATCH', 'DELETE',
-                    'GRANT', 'REVOKE', 'SELECT', 'INSERT', 'UPDATE', 'CREATE', 'ALTER', 'DROP', 'TRUNCATE',
-                    'MAX', 'MIN', 'AVG', 'SUM', 'COUNT',
-                    'VScode', 'VSCode', 'IntelliJ', 'PyCharm'):
+        if acr in COMMON_ACRONYMS or acr in PROPER_NOUN_ACRONYMS:
             continue
-        first_pos = text.index(acr)
-        # Check if full name appears before this position
-        before = text[max(0,first_pos-60):first_pos]
-        signal = re.escape(acr)
-        if re.search(r'[（(]\s*' + signal + r'\s*[)）]', text[:first_pos+len(acr)]):
+        if _has_gloss(body, acr):
             continue
-            hits.append({"rule": "acronym_first_use", "position": first_pos, "warning": f"缩写 {acr} 首次出现未标注全称", "context": f"...{before}[{acr}]..."})
+        first_pos = body.index(acr)
+        hits.append({"rule": "acronym_first_use", "position": first_pos,
+                     "warning": f"缩写 {acr} 全文无全称标注（格式：中文（{acr}，英文全称））",
+                     "context": body[max(0, first_pos - 25):first_pos + len(acr) + 25]})
     return hits[:10]  # limit to 10 hits
+
+
+def extract_glossary(text):
+    """Extract 术语对照表 rows and verify 出处 citations resolve to 参考文献.
+
+    Returns (hits, glossary_terms).
+    """
+    hits = []
+    glossary_terms = set()
+    m = re.search(r'#{1,3}\s*(?:术语对照|术语表|缩写登记表|术语速查)', text)
+    if not m:
+        hits.append({"rule": "glossary_missing", "position": 0,
+                     "warning": "tech 文章缺少文末术语对照表（格式：| 术语 | 中文 | 一句话解释 | 出处 |），所有行话/缩写必须登记",
+                     "context": "文末术语对照表"})
+        return hits, glossary_terms
+    section = text[m.end():]
+    ref_m = re.search(r'#{1,3}\s*参考文献', section)
+    if ref_m:
+        section = section[:ref_m.start()]
+        ref_section = text[ref_m.start():]
+    else:
+        ref_section = ""
+    rows = re.findall(r'\|([^|\n]+)\|[^|\n]+\|[^|\n]+\|[^|\n]+\|', section)
+    for row in rows:
+        cell = row.strip()
+        if not cell or cell.startswith('术语') or re.match(r'^-+$', cell):
+            continue
+        glossary_terms.add(cell.lower())
+    cites = {int(x) for x in re.findall(r'\[(\d+)\]', section)}
+    refs = {int(x) for x in re.findall(r'\[(\d+)\]', ref_section)}
+    if refs:
+        bad = sorted(cites - refs)
+        if bad:
+            hits.append({"rule": "glossary_citation", "position": m.start(),
+                         "warning": f"术语表出处编号 {bad} 在参考文献中不存在（引用必须真实可核验）",
+                         "context": f"术语对照表出处列 {bad}"})
+    return hits, glossary_terms
+
+
+def scan_terminology(text, glossary_terms):
+    """行话类英文词必须有内联解释或登记在术语对照表。参考文献区不参与扫描。"""
+    body = re.split(r'#{1,3}\s*参考文献', text)[0]
+    body = strip_code_blocks(body)
+    hits = []
+    for term in TERMINOLOGY_JARGON:
+        m = re.search(r'\b' + re.escape(term) + r'\b', body, re.IGNORECASE)
+        if not m:
+            continue
+        p = m.start()
+        if any(term.lower() in g for g in glossary_terms):
+            continue
+        if _has_gloss(body, term):
+            continue
+        hits.append({"rule": "terminology_unexplained", "position": p,
+                     "warning": f"行话 '{term}' 全文无中文解释，也未登记在术语对照表（格式：中文（{term}，一句话解释））",
+                     "context": body[max(0, p - 25):p + len(term) + 25]})
+    return hits
 
 def scan_unit_missing(text):
     """Scan for technical indicators without units."""
@@ -505,10 +615,13 @@ def main():
     }
 
     if args.mode == "tech":
+        glossary_hits, glossary_terms = extract_glossary(text)
         results = {
             "fabricated_data": scan_fabricated_data(clean_text),
             "analogy_limitation": scan_analogy_limitation(clean_text),
             "acronym_first_use": scan_acronym_first_use(clean_text),
+            "terminology_unexplained": scan_terminology(clean_text, glossary_terms),
+            "glossary": glossary_hits,
             "unit_missing": scan_unit_missing(clean_text),
             "code_block_count": scan_code_block_count(text, args.framework or "原理演进型"),
             "p0_quadrant": scan_p0_quadrants(clean_text),

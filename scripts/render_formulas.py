@@ -258,11 +258,11 @@ def _fmt_em(value: float) -> str:
 def render_formulas_in_markdown(
     md_path: Path,
     out_dir: Path,
-    fontsize: float = 16.0,
-    dpi: int = 300,
+    fontsize: float = 11.0,
+    dpi: int = 200,
     color: str = "#333333",
     fontset: str = "cm",
-    pad_px: int = 4,
+    pad_px: int = 3,
     inline_scale: float = 1.0,
     block_scale: float = 1.15,
     inline_max_width_px: int = 520,
@@ -307,25 +307,37 @@ def render_formulas_in_markdown(
 
         # Compute the per-instance style.
         if is_block:
-            disp_h_em = m["height_em"] * block_scale
-            # Cap the height of very tall display equations so a single one does
-            # not eat the whole screen; aspect ratio is preserved by
-            # ``width:auto`` + ``max-width``.
+            # Block formula: keep ``display:block`` + centered margins, but
+            # we no longer pin a height in em — WeChat's editor ignores
+            # em units on ``<img>`` and shows the image at its natural
+            # size. We render the PNG at a sensible target size
+            # (block default fontsize=18pt, dpi=200 → ~50px tall) and
+            # let the natural aspect ratio flow. ``max-width:96%`` caps
+            # a pathologically wide equation so it never blows past the
+            # column. ``border:0`` overrides WeChat's default rule that
+            # puts a gray border around every <img> in the editor.
             style = (
-                f"display:block;margin:1.2em auto;height:{_fmt_em(disp_h_em)};"
-                f"max-height:3em;max-width:92%;width:auto"
+                f"display:block;margin:1.2em auto;max-width:96%;"
+                f"width:auto;height:auto;border:0"
             )
         else:
-            disp_h_em = m["height_em"] * inline_scale
-            # Baseline alignment: the formula baseline sits ``descent_em`` above
-            # the image's bottom edge. Setting ``vertical-align: -descent_em``
-            # drops the image bottom by that amount, landing the formula
-            # baseline exactly on the text baseline (proper typographic
-            # alignment). A small horizontal margin keeps it off the words.
-            va = m["descent_em"]
+            # Inline formula: WeChat ignores em on <img> height and forces
+            # ``display:block`` on every <img> in the editor, so the
+            # formula image ends up the size of the original PNG, on its
+            # own line, mid-sentence. We work around that two ways:
+            #   1) Render the PNG at a small target size
+            #      (inline default fontsize=11pt, dpi=200 → ~30px tall,
+            #      close to body text height). Even shown at natural
+            #      size, it fits within a single text line.
+            #   2) Use ABSOLUTE pixel height + width:auto in the HTML so
+            #      browsers that DO honour CSS (preview, web view) can
+            #      scale the image down to a 20px-tall formula. WeChat
+            #      will fall back to the natural PNG size, which is
+            #      already small.
+            # ``border:0`` overrides WeChat's auto-border on images.
             style = (
-                f"height:{_fmt_em(disp_h_em)};vertical-align:-{_fmt_em(va)};"
-                f"margin:0 .12em;width:auto;display:inline-block"
+                f"height:20px;width:auto;vertical-align:-3px;"
+                f"margin:0 3px 0 0;display:inline;border:0"
             )
 
         rendered.append(
@@ -370,12 +382,16 @@ def main():
         help="Formula image output dir (default: <article-stem>-formulas/ next to the article)",
     )
     parser.add_argument(
-        "--fontsize", type=float, default=16.0,
-        help="Render fontsize in pt (default: 16 — matches 16px body text). Higher = larger glyphs in the PNG.",
+        "--fontsize", type=float, default=11.0,
+        help="Render fontsize in pt (default: 11 — produces ~30px-tall inline PNGs, "
+             "close to body text size). WeChat's editor ignores CSS em on <img>, "
+             "so the PNG natural size IS the on-screen size in WeChat.",
     )
     parser.add_argument(
-        "--dpi", type=int, default=300,
-        help="Render DPI (default: 300). 300+ is enough for retina displays; below 200 looks fuzzy on phones.",
+        "--dpi", type=int, default=200,
+        help="Render DPI (default: 200 — enough for retina; going higher just "
+             "enlarges the PNG natural size, which WeChat will then show even "
+             "bigger because it ignores CSS height on <img>).",
     )
     parser.add_argument(
         "--color", default="#333333",
@@ -387,8 +403,8 @@ def main():
         help="Mathtext fontset (default: cm — Computer Modern / classic LaTeX look).",
     )
     parser.add_argument(
-        "--pad-px", type=int, default=6,
-        help="Padding around the glyphs in pixels at the render dpi (default: 6).",
+        "--pad-px", type=int, default=3,
+        help="Padding around the glyphs in pixels at the render dpi (default: 3).",
     )
     parser.add_argument(
         "--inline-scale", type=float, default=1.0,

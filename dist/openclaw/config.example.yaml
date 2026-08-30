@@ -68,3 +68,21 @@ image:
 
 # 默认排版主题
 theme: "professional-clean"
+
+# 排版引擎来源
+#   source: "local"  → 使用内置 20 套主题（上面 theme 字段生效）
+#   source: "doocs"  → 复用 md.doocs.org 官方排版主题（排版风格与 Doocs 微信编辑器一致）
+# 启用 doocs 后，下面的 layout.doocs.* 生效；命令行也可用
+#   --layout-source doocs --doocs-theme grace --doocs-primary "#e64340"
+layout:
+  source: "local"
+  doocs:
+    theme: "default"          # default / grace / simple
+    primary: "#3b82f6"        # 主题主色（标题下划线、强调、引用左边框等）
+    font_size: "16px"         # 正文字号
+
+# 数学公式承载方式：
+#   latex —— 保留原始 $...$ / $$...$$，由你下游的 公众号编辑器/渲染器（支持
+#           MathJax/KaTeX 的工具）负责显示。md 始终可编辑，显示最自然（默认）。
+#   image —— 预渲染为 PNG 图片（render_formulas.py），兼容不支持 LaTeX 的发布链路。
+formula_mode: latex

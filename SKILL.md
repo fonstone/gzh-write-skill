@@ -447,6 +447,7 @@ if mode == tech:
 - **素材 + 增强约束**：Step 3.2 的素材和增强材料分散嵌入各 H2 段落。增强策略的核心输出（角度/密度要点/细节/用户声音）必须贯穿全文，不只装饰性出现一次
 - **论文引用（tech + 有论文素材包）**：正文引用论文图用「图 N」（N 与 paper.json 的 figures.number 一致）；数据/结论必须带论文出处（"论文 4.2 节""Fig.3"）；禁止编造论文中不存在的数据；配图锚点 ≥3 张中论文图占主导，落点标记对应论文图号
 - **公式写作（tech）**：公式用 `$...$`（行内）/ `$$...$$`（块级）LaTeX 书写，遵循 mathtext 子集（分式 `\frac{}{}`、上下标、根式 `\sqrt{}`、希腊字母、求和 `\sum_{}^{}`、极限 `\lim`）；不等式可写 `\le`/`\ge`（渲染器会自动规范为 `\leq`/`\geq`，两种写法都支持）；矩阵等 mathtext 不支持的先试 `\mathbf{}` 语法，仍失败则用表格或文字描述。渲染规则：Computer Modern 字体（经典 LaTeX 外观），行内公式按实际字形度量以 em 为单位缩放并与正文基线对齐（`height:Xem;vertical-align:-Yem`），块级公式居中显示（`display:block;height:Xem;max-width:88%`），高分辨率 300dpi + 紧裁剪，与正文协调不突兀
+- **术语解释流程（tech，强制）**：按 tech-writing-guide.md「术语解释流程」四步执行——①正文首次出现即给"中文名 + 英文原名 + 一句话解释"三要素；②能翻译就不留英文（prompt→提示词、shape→张量形状、tensor→张量）；③文末「参考文献」之前放 `## 术语对照` 四列表（术语|中文|一句话解释|出处）；④出处编号必须可解析到参考文献，全称/解释/出处来自参考文献或官方文档，禁止自编。脚本兜底：`l1_hard_rules.py --mode tech` 的 `acronym_first_use`/`terminology_unexplained`/`glossary` 三项命中 = 0
 - **公式模式（formula_mode）**：`config.yaml` 的 `formula_mode` 决定公式最终承载方式。**默认 `latex`**——源 Markdown 保留原始 `$...$`/`$$...$$`，转换器原样输出，本地预览自动注入 MathJax 自然渲染（不再预渲染成图片，md 始终可编辑）；推送到公众号时由你下游支持 MathJax/KaTeX 的渲染器显示。**`image` 模式**（旧行为）才把公式渲染成 PNG 图片（`scripts/render_formulas.py`），用于不依赖下游渲染器的场景。其余「公式渲染校验」步骤仅在 `image` 模式执行；`latex` 模式下原始 `$...$` 是预期内容，**不会被 lint/validate 判为 ERROR**。
 - **文章规格（tech 深度文，强制对齐 `templates/ARTICLE_TEMPLATE.md` 与 `templates/reference-ai-os.md`）**：正文 **≥ 5000 中文字**；含 **3-4 张原创示意图**（`scripts/make_diagrams.py` 范式：matplotlib + 微软雅黑，图注标「原创示意图」并注概念来源，**不复制论文原图**）；引用 **≥ 10 篇真实论文**（正文 `[N]` 行内标注、文末 `## 参考文献` 列书目，格式见模板）；公式用**原始 LaTeX**（`formula_mode: latex`）；代码用带语言标注的围栏块（自动转美观代码卡片）。每次生成深度文都须达到该格式，确保各篇观感与信息密度一致。
 - **写作规范**：wechat 模式用 writing-guide.md 的基础规则（禁用词、句长方差、词汇混用、翻译腔免疫、句式不重复、不自标深度、最高法则等）+ human-prose.md 的局部问题推进与交付禁令（翻案句 0 容忍/冒号仅限引原话/无破折号/禁论坛服装等，见 `references/human-prose.md` 第 3/4 节）；tech 模式用 tech-writing-guide.md 的五层规范（开头层/行文层/内容层/结尾层/术语规范）+ tech-prose.md 的段落推进与技术交付禁令（每段新增新机制/新代码/新对比/新取舍；翻案句 0 容忍/破折号 0/提示性冒号 0 且技术格式冒号豁免，见 `references/tech-prose.md` 第 3/4 节）
@@ -520,7 +521,7 @@ python3 {skill_dir}/scripts/render_formulas.py {article_path} -o {skill_dir}/out
 | 句长方差 | 最短与最长句相差 ≥ 30 字 | L1 报告中的 `sentence_length_range` 通过 | 连续 3 句相近长度 → 拆句或加短句 |
 | 句式重复 | "换句话说"/"哪怕A也B"等非翻案高风险句式（翻案句见下方"动作级禁令"行，0 容忍） | 同一种全文 ≤ 1 次 | 第二次出现替换为不同句式 |
 | 翻译腔密度 | 从句嵌套/主语充分化/被动语态密集段落 | 翻译腔特征段落数 = 0 | 从句拆开，主语该省则省 |
-| 缩写管理 | 所有专业缩写首次出现有全称 | L1 `acronym_first_use` 命中 = 0 | 自动插入全称 |
+| 术语管理（tech） | 缩写全文有全称；行话（prompt/token/shape 等）有中文名+一句话解释或登记术语表；文末「术语对照」表存在且出处编号可解析到参考文献 | L1 `acronym_first_use` + `terminology_unexplained` + `glossary` 命中 = 0 | 按「术语解释流程」逐项补全（中文名+英文原名+一句话解释），出处编号找不到参考文献条目 = 引用造假，必须修 |
 | 数字单位 | 所有技术指标数字带单位 | L1 `unit_missing` 命中 = 0 | 补充单位 |
 | 代码块数量（tech） | — | 满足 `--framework` 对应框架的下限要求（源码拆解型≥2/实践指南型≥3/技术对比型≥1/全景架构型≥3） | 在瓶颈层和案例闭环处补充代码/配置/命令块 |
 | P0 四象限覆盖（tech） | — | 每个 P0 知识点覆盖"是什么/为什么/何时用/怎么用"四个象限 | 在缺失象限处补充对应维度 |
@@ -564,7 +565,7 @@ python3 {skill_dir}/scripts/render_formulas.py {article_path} -o {skill_dir}/out
 **内容层**：按问题驱动法展开，每个知识点配套踩坑点，无模糊表述
 **结尾层**：使用了 ending_templates.md 中的模板
 **风格层**：按 ai-patterns.md 做三层 AI 模式扫描 + 自然度评分
-**通用**：术语缩写、类比局限、代码环境、数字单位、SSP 原则
+**通用**：术语管理（缩写全称 + 行话内联解释 + 术语对照表出处可核验）、类比局限、代码环境、数字单位、SSP 原则
 
 ---
 
@@ -607,7 +608,7 @@ if mode == tech:
 python3 {skill_dir}/scripts/l1_hard_rules.py {article_path} --json --mode {mode} {tech_framework_flag}
 ```
 - wechat 模式：覆盖 L1-1~L1-6：禁用词/禁用标点/结构套话/空泛工具名/假设性例子/AI 角色边界 + 追加 `python3 {skill_dir}/scripts/check_prose.py {article_path}`（L1-7 翻案腔 0 容忍/冒号仅限引原话/破折号/黑话/模型路标，失败项清零）
-- tech 模式：覆盖 L1-1~L1-6：技术编造扫描/API验证/类比局限性/代码可运行/缩写管理/数字单位 + 框架级代码块数量下限 + P0 四象限覆盖检查（需设置 `{tech_framework_flag}` 为 `--framework <所选框架>`）+ 追加 `python3 {skill_dir}/scripts/check_prose.py {article_path} --tech`（中文韵律：翻案句 0 容忍/破折号 0/提示性冒号 0，技术格式冒号豁免，失败项清零；警告项进 L2 人工确认）
+- tech 模式：覆盖 L1-1~L1-6：技术编造扫描/API验证/类比局限性/代码可运行/术语管理/数字单位 + 框架级代码块数量下限 + P0 四象限覆盖检查（需设置 `{tech_framework_flag}` 为 `--framework <所选框架>`）+ 术语表出处核验（L1-8：`acronym_first_use`/`terminology_unexplained`/`glossary` 三项命中 = 0，见 tech-self-check-pyramid.md）+ 追加 `python3 {skill_dir}/scripts/check_prose.py {article_path} --tech`（中文韵律：翻案句 0 容忍/破折号 0/提示性冒号 0，技术格式冒号豁免，失败项清零；警告项进 L2 人工确认）
 - 命中即逐个定向替换，不留到人工
 
 论文引用验证（tech + 有论文素材包时执行）：
@@ -712,6 +713,43 @@ if mode == tech:
 | **禁用** | 其他花哨主题（`bauhaus`/`bold-green`/`bold-navy`/`focus-red`/`elegant-rose`/`warm-editorial`/`sspai`/`bytedance`/`midnight`/`newspaper`/`minimal-gold`/`ink`/`professional-clean`） | 装饰性过强或与极简专业风格冲突，技术文章不使用 |
 
 **wechat 模式**：使用 style.yaml 的 `theme` 字段，原逻辑不变。但按 `references/wechat-theme-guide.md` 的主题选择规则做调性匹配检查——如果用户设的主题与文章原型/content_style 明显冲突（如干货型设了 `elegant-rose`），提示调整。
+
+**7.0.1 Doocs 排版后端（`layout.source: doocs`）**：
+
+除了内置主题，还可以复用 **md.doocs.org（Doocs MD 微信公众号编辑器）的官方排版主题**，让文章拥有与 Doocs 编辑器一致的视觉效果。`toolkit/doocs_themes.py` 把随技能打包的官方主题 CSS（`toolkit/doocs/themes/{base,default,grace,simple}.css`）解析、内联后喂给既有转换器，走与本地主题完全相同的草稿箱管线。
+
+> 为什么不直接 POST 给 md.doocs.org？该站的 Markdown→HTML 转换完全在浏览器端完成，服务端（Cloudflare Worker）只提供分享/同步/图床，**没有稳定的 `/api/convert` 接口**；且其主题依赖 `<style>` + CSS 变量 `var(--md-*)`，微信草稿箱会剥离这两者。本方案改为「打包官方主题 CSS + 逐元素内联」，达到等价视觉效果且运行时无需联网。
+
+**可用 Doocs 主题**：
+
+| 主题 | 风格 | 适合 |
+|------|------|------|
+| `default` | 蓝底白字居中标题 + 引用左边框 | 科技资讯 / 通用 |
+| `grace` | 柔和卡片阴影标题 + 引用左边框 | 品牌故事 / 人文 |
+| `simple` | 圆角留白标题 + 引用上下右边框 | 极简随笔 |
+
+**开启方式（二选一）**：
+
+```yaml
+# config.yaml（或 config.example.yaml）
+layout:
+  source: doocs            # local（默认）= 内置主题；doocs = 复用 md.doocs.org 官方排版
+  doocs:
+    theme: default         # default / grace / simple
+    primary: "#3b82f6"     # 主色覆盖（标题下划线、强调、引用左边框等）
+    font_size: "16px"       # 正文字号覆盖
+```
+
+```bash
+# CLI 覆盖（优先级高于 config.yaml 的 layout.doocs.*）
+python3 {skill_dir}/toolkit/cli.py preview {markdown} --layout-source doocs --doocs-theme default --doocs-primary "#e64340" --no-open -o {output}.html
+python3 {skill_dir}/toolkit/cli.py publish {markdown} --layout-source doocs --doocs-theme grace --cover {cover} --title "{title}" --digest "{digest}"
+```
+
+**要点**：
+- `layout.source: doocs` 与 Step 7.0 的 `--theme` 是两条独立轴：doocs 模式下主题由 `--doocs-theme` / `layout.doocs.theme` 决定，忽略 `--theme`。
+- 转换后**所有样式逐元素内联**（无 `<style>`/`<div>`/`class=`），并通过 7.3 双门校验（ERROR 必须清零），可直接推送草稿箱。
+- 主色 / 字号可通过 `primary` / `font_size` 覆盖；未知变量或 `color-mix()` 等微信不支持的写法会被自动写死为具体值。
 
 **tech 模式主题映射**（按 tech-frameworks.md 的 5 套框架）：
 
@@ -846,6 +884,7 @@ python3 {skill_dir}/toolkit/cli.py validate {output}.html
 | 用框架 B 重写 | 回到 Step 4 |
 | 换一个选题 | 回到 Step 2.3 |
 | 看看有什么主题 | `python3 {skill_dir}/toolkit/cli.py gallery` |
+| 用 Doocs 排版 / Doocs 主题 | `python3 {skill_dir}/toolkit/cli.py preview {markdown} --layout-source doocs --doocs-theme default --no-open -o {output}.html`（发布把 `preview` 换 `publish`，主题 default/grace/simple 任选） |
 | 换成 XX 主题 | 重新渲染 |
 | 看看文章数据 | `读取: {skill_dir}/references/effect-review.md` |
 | 学习我的修改 | `读取: {skill_dir}/references/learn-edits.md`。支持本地 markdown 修改和微信草稿箱同步（`--from-wechat`） |

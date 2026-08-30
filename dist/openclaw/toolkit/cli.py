@@ -16,7 +16,7 @@ from pathlib import Path
 import yaml
 
 from converter import WeChatConverter, preview_html
-from theme import load_theme, list_themes
+from theme import load_theme, list_themes, Theme
 from wechat_api import get_access_token, upload_image, upload_thumb
 from publisher import create_draft, create_image_post
 from validate_html import validate as validate_html
@@ -170,10 +170,37 @@ def _print_layout_report(report: dict) -> None:
         print(f"   ✨ 自动排版：{'; '.join(parts)}")
 
 
+def _resolve_theme(args, cfg) -> Theme:
+    """Pick the layout Theme: Doocs backend or local theme.
+
+    layout.source == "doocs"  → build_doocs_theme(...)  (md.doocs.org 官方排版)
+    otherwise                 → load_theme(...)         (内置 20 主题)
+    """
+    layout_cfg = cfg.get("layout", {}) or {}
+    source = getattr(args, "layout_source", None) or layout_cfg.get("source", "local")
+    if str(source).lower() == "doocs":
+        from doocs_themes import build_doocs_theme, list_doocs_themes
+        dox = layout_cfg.get("doocs", {}) or {}
+        theme_name = getattr(args, "doocs_theme", None) or dox.get("theme", "default")
+        primary = getattr(args, "doocs_primary", None) or dox.get("primary")
+        font_size = getattr(args, "doocs_font_size", None) or dox.get("font_size")
+        try:
+            return build_doocs_theme(
+                theme_name=theme_name, primary_color=primary, font_size=font_size
+            )
+        except FileNotFoundError as e:
+            avail = ", ".join(list_doocs_themes())
+            print(f"⚠️  Doocs 主题 {theme_name} 不存在（可用: {avail}），回退到本地主题。",
+                  file=sys.stderr)
+        # fall through to local theme on error
+    theme_name = args.theme or cfg.get("theme", "professional-clean")
+    return load_theme(theme_name)
+
+
 def cmd_preview(args):
     """Generate HTML preview and open in browser."""
-    theme = load_theme(args.theme)
     cfg = load_config()
+    theme = _resolve_theme(args, cfg)
     formula_mode = _formula_mode(args, cfg)
     result, lint, report = _run_pipeline(args, cfg, theme)
 
@@ -211,7 +238,6 @@ def cmd_publish(args):
     # Resolve from CLI args → config.yaml fallback
     appid = args.appid or wechat_cfg.get("appid")
     secret = args.secret or wechat_cfg.get("secret")
-    theme_name = args.theme or cfg.get("theme", "professional-clean")
     author = args.author or wechat_cfg.get("author")
     tech_enhance = args.tech or cfg.get("mode", "") == "tech"
 
@@ -219,7 +245,7 @@ def cmd_publish(args):
         print("Error: --appid and --secret required (or set in config.yaml)", file=sys.stderr)
         sys.exit(1)
 
-    theme = load_theme(theme_name)
+    theme = _resolve_theme(args, cfg)
     result, lint, report = _run_pipeline(args, cfg, theme)
 
     # Publishing must not ship content that fails the first gate
@@ -591,6 +617,11 @@ def main():
     p_preview.add_argument("--tech", action="store_true", help="Enable tech-enhance mode (register/fn/param coloring + param tables)")
     p_preview.add_argument("--formula-mode", choices=("latex", "image"), default=None,
                            help="公式承载方式：latex=保留原始 $...$（由下游渲染器显示，默认）；image=预渲染为 PNG 图片")
+    p_preview.add_argument("--layout-source", choices=("local", "doocs"), default=None,
+                           help="排版引擎来源：local=内置主题；doocs=复用 md.doocs.org 官方排版主题")
+    p_preview.add_argument("--doocs-theme", default=None, help="Doocs 主题名（default/grace/simple）")
+    p_preview.add_argument("--doocs-primary", default=None, help="Doocs 主色覆盖，如 #3b82f6")
+    p_preview.add_argument("--doocs-font-size", default=None, help="Doocs 正文字号，如 16px")
     _add_layout_flags(p_preview)
 
     # publish
@@ -606,6 +637,11 @@ def main():
     p_publish.add_argument("--tech", action="store_true", help="Enable tech-enhance mode (auto-on when config mode=tech)")
     p_publish.add_argument("--formula-mode", choices=("latex", "image"), default=None,
                            help="公式承载方式：latex=保留原始 $...$（默认）；image=预渲染为 PNG 图片")
+    p_publish.add_argument("--layout-source", choices=("local", "doocs"), default=None,
+                           help="排版引擎来源：local=内置主题；doocs=复用 md.doocs.org 官方排版主题")
+    p_publish.add_argument("--doocs-theme", default=None, help="Doocs 主题名（default/grace/simple）")
+    p_publish.add_argument("--doocs-primary", default=None, help="Doocs 主色覆盖，如 #3b82f6")
+    p_publish.add_argument("--doocs-font-size", default=None, help="Doocs 正文字号，如 16px")
     _add_layout_flags(p_publish)
 
     # layout（独立排版预处理）

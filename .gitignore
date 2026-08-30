@@ -48,3 +48,6 @@ khazix-skills/
 
 # WorkBuddy project runtime memory (not source)
 .workbuddy/
+
+# CodeGraph runtime index (generated, not source)
+.codegraph/

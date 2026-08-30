@@ -238,6 +238,8 @@ cp config.example.yaml config.yaml
 
 填入微信公众号 `appid`/`secret`（推送需要）和图片 API key（生图需要）。不配也能用——自动降级为本地 HTML + 输出图片提示词。
 
+排版主题支持两种来源：内置 20 套主题（`theme` 字段），或复用 **md.doocs.org 官方排版**（`layout.source: doocs`，可选 `default`/`grace`/`simple` 主题与主色覆盖）。详见 `config.example.yaml` 的 `layout` 段与 SKILL.md「Step 7.0.1」。
+
 ### 为你的公众号定制风格
 
 ```bash
