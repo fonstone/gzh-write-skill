@@ -216,7 +216,10 @@ def measure(repo_root: Path) -> dict:
         p = repo_root / rel
         if p.exists():
             entries.append(_entry(rel, p, scope))
-        else:
+        elif scope != "auxiliary":
+            # Auxiliary refs are conditional/optional by definition (e.g. the
+            # user-generated exemplar index, which a fresh clone does not
+            # have); only on-path refs must actually exist.
             missing.append(rel)
 
     # Bare template mentions (tech-mode deep-article specs) are mandatory
