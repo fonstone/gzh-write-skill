@@ -5,12 +5,14 @@ Forked from wechat_article_skills/scripts/markdown_to_html.py,
 adapted for YAML-driven themes and agent integration.
 """
 
+import base64
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
 import markdown
+import urllib.request
 from bs4 import BeautifulSoup
 
 from theme import Theme, load_theme, get_inline_css_rules
@@ -23,16 +25,32 @@ from theme import Theme, load_theme, get_inline_css_rules
 # exactly as written.
 _MATH_RE = re.compile(r"\$\$.+?\$\$|\$[^$\n]+?\$", re.DOTALL)
 
+# Fenced code blocks and inline code must never be scanned for math: a shell
+# snippet like ``echo $$ > tasks`` would otherwise open a ``$$...$$`` region
+# that swallows everything up to the next block formula — silently dropping
+# images, formulas and whole paragraphs that follow it.
+_CODE_SPLIT_RE = re.compile(r"(```.*?```|`[^`\n]*`)", re.DOTALL)
+
 
 def _protect_math(text: str) -> tuple[str, list[str]]:
-    """Replace $...$ / $$...$$ with inert placeholders; return (text, store)."""
+    """Replace $...$ / $$...$$ with inert placeholders; return (text, store).
+
+    Code spans and fences are left untouched so a literal ``$$`` inside a
+    shell example cannot be mistaken for a display-math delimiter.
+    """
     store: list[str] = []
 
     def _stash(m: re.Match) -> str:
         store.append(m.group(0))
         return f"zmathph{len(store) - 1}z"
 
-    return _MATH_RE.sub(_stash, text), store
+    out: list[str] = []
+    for seg in _CODE_SPLIT_RE.split(text):
+        is_code = seg.startswith("```") or (
+            len(seg) > 1 and seg.startswith("`") and seg.endswith("`")
+        )
+        out.append(seg if is_code else _MATH_RE.sub(_stash, seg))
+    return "".join(out), store
 
 
 def _restore_math(html: str, store: list[str]) -> str:
@@ -1067,7 +1085,93 @@ class WeChatConverter:
         return truncated + ellipsis
 
 
-def preview_html(body_html: str, theme: Theme, mathjax: bool = False) -> str:
+def _inline_mermaid_js() -> str:
+    """Return an inline <script> tag for mermaid.js using a base64 data URL.
+
+    Falls back to a public CDN if the bundled copy is missing.
+    """
+    bundled = Path(__file__).parent / "assets" / "mermaid.min.js"
+    if bundled.exists():
+        b64 = base64.b64encode(bundled.read_bytes()).decode("ascii")
+        return f'<script src="data:application/javascript;base64,{b64}"></script>'
+    return '<script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>'
+
+
+_MERMAID_SCRIPT = """
+    <!-- Mermaid: render fenced ```mermaid blocks as real diagrams (preview only) -->
+    __MERMAID_JS_TAG__
+    <script>
+      document.addEventListener('DOMContentLoaded', function () {
+        if (typeof mermaid === 'undefined') { return; }
+        mermaid.initialize({ startOnLoad: false, theme: 'default', securityLevel: 'loose' });
+        var pres = document.querySelectorAll('pre[data-lang="mermaid"]');
+        if (!pres.length) { return; }
+        pres.forEach(function (pre) {
+          var section = pre.parentNode;
+          var code = pre.querySelector('code');
+          var src = code ? code.textContent : pre.textContent;
+          var div = document.createElement('div');
+          div.className = 'mermaid';
+          div.style.textAlign = 'center';
+          div.style.margin = '1.6em 0';
+          div.textContent = src;
+          section.parentNode.replaceChild(div, section);
+        });
+        try {
+          mermaid.run({ querySelector: '.mermaid' });
+        } catch (e) {
+          console.error('Mermaid render failed:', e);
+        }
+      });
+    </script>
+"""
+
+
+def _render_mermaid_to_svg_dataurl(src: str):
+    """Render a mermaid source string into an inline ``data:image/svg+xml`` URL.
+
+    Uses mermaid.ink (network). Returns None on any failure so the caller can
+    fall back to the client-side inline script (which some preview panes run).
+    """
+    try:
+        b64 = base64.urlsafe_b64encode(src.strip().encode("utf-8")).decode("ascii").rstrip("=")
+        url = f"https://mermaid.ink/svg/{b64}?bgColor=white&theme=default"
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            svg = resp.read().decode("utf-8", "replace")
+        if not svg.lstrip().startswith("<svg"):
+            return None
+        sb64 = base64.b64encode(svg.encode("utf-8")).decode("ascii")
+        return f"data:image/svg+xml;base64,{sb64}"
+    except Exception:
+        return None
+
+
+def _inline_mermaid_images(body_html: str) -> str:
+    """Replace ``pre[data-lang="mermaid"]`` blocks with rendered <img> (preview).
+
+    The preview pane may not execute <script>, so we server-side render each
+    mermaid diagram to an inline SVG image. Blocks that fail to render keep
+    their original <pre> for the client-side fallback.
+    """
+    soup = BeautifulSoup(body_html, "html.parser")
+    changed = False
+    for pre in soup.find_all("pre", {"data-lang": "mermaid"}):
+        code = pre.find("code")
+        src = code.get_text() if code else pre.get_text()
+        dataurl = _render_mermaid_to_svg_dataurl(src)
+        if not dataurl:
+            continue
+        img = soup.new_tag("img")
+        img["src"] = dataurl
+        img["alt"] = "mermaid 流程图"
+        img["style"] = "max-width:100%;height:auto;display:block;margin:1.4em auto;"
+        pre.replace_with(img)
+        changed = True
+    return str(soup) if changed else body_html
+
+
+def preview_html(body_html: str, theme: Theme, mathjax: bool = False, mermaid: bool = True) -> str:
     """
     Wrap body content in a full HTML document for browser preview.
     This is only for local preview — NOT for WeChat publishing.
@@ -1076,6 +1180,10 @@ def preview_html(body_html: str, theme: Theme, mathjax: bool = False) -> str:
     ``$...$`` / ``$$...$$`` render as real math in the browser preview. This
     makes the local preview show formulas naturally; the WeChat fragment
     itself still carries the raw LaTeX for the downstream renderer.
+
+    ``mermaid``: when True (default), render fenced ```mermaid code blocks
+    as real flowcharts in the browser preview. The WeChat fragment keeps the
+    raw mermaid source as a fenced code block.
     """
     mathjax_script = ""
     if mathjax:
@@ -1091,6 +1199,13 @@ def preview_html(body_html: str, theme: Theme, mathjax: bool = False) -> str:
             "    <script id=\"MathJax-script\" async\n"
             "      src=\"https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js\"></script>\n"
         )
+    mermaid_script = _MERMAID_SCRIPT.replace("__MERMAID_JS_TAG__", _inline_mermaid_js()) if mermaid else ""
+    # Server-side render mermaid blocks to inline SVG so the preview shows the
+    # diagram even when the preview pane does not execute <script>.
+    try:
+        body_html = _inline_mermaid_images(body_html)
+    except Exception:
+        pass
     return f"""<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -1099,7 +1214,7 @@ def preview_html(body_html: str, theme: Theme, mathjax: bool = False) -> str:
     <title>Preview</title>
     <style>
 {theme.base_css}
-    </style>{mathjax_script}
+    </style>{mathjax_script}{mermaid_script}
 </head>
 <body>
     {body_html}

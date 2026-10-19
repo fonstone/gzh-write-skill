@@ -137,8 +137,29 @@ def _already_numbered(title: str) -> bool:
     return bool(re.match(r"^(∞|\d{1,2})[\s.、]+", title.strip()))
 
 
+# 中文数字序号（一、二、三…十、十一…）开头的标题不再叠加 01/02 编号
+_CJK_NUMERAL_RE = re.compile(r"^[一二三四五六七八九十百零〇两]{1,3}[、.．\s]")
+
+# 文末类标题（参考文献/附录/致谢等）不参与章节编号
+_BACKMATTER_RE = re.compile(r"^(参考文献|参考资料|附录|致谢|后记|拓展阅读|相关阅读)", re.I)
+
+
+def _has_cjk_numeral(title: str) -> bool:
+    return bool(_CJK_NUMERAL_RE.match(title.strip()))
+
+
+def _is_backmatter(title: str) -> bool:
+    return bool(_BACKMATTER_RE.match(title.strip()))
+
+
 def _apply_section_numbering(lines: list[str]) -> list[str]:
-    """Prepend 01/02/03 to each H2 in order; ending section gets ∞."""
+    """Prepend 01/02/03 to each H2 in order; ending section gets ∞.
+
+    例外（不再叠加 01/02）：
+      * 已是数字/∞ 编号（幂等）；
+      * 标题已用中文数字序号（一、二、三…）——避免 "01 一、" 双重编号；
+      * 文末类标题（参考文献、附录等）。
+    """
     h2_indices: list[int] = [i for i, ln in enumerate(lines) if _is_h2(ln)]
     if not h2_indices:
         return lines
@@ -146,8 +167,8 @@ def _apply_section_numbering(lines: list[str]) -> list[str]:
     n = 0
     for order, i in enumerate(h2_indices):
         title = lines[i].strip()[2:].strip()
-        if _already_numbered(title):
-            continue  # 幂等：已编号跳过
+        if _already_numbered(title) or _has_cjk_numeral(title) or _is_backmatter(title):
+            continue  # 已编号 / 中文数字序号 / 文末 → 不加 01/02
         n += 1
         if order == len(h2_indices) - 1 and CLOSING_ENDING.search(title):
             prefix = "∞ "

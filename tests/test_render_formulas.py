@@ -46,7 +46,7 @@ def test_render_formula_returns_em_metrics(tmp_path):
     assert m["height_em"] < 2.0
 
 
-def test_render_inline_formula_gets_baseline_em_style(tmp_path):
+def test_render_inline_formula_gets_wechat_safe_style(tmp_path):
     md = tmp_path / "article.md"
     md.write_text("成本 $E=mc^2$ 结束\n", encoding="utf-8")
     out_dir = tmp_path / "formulas"
@@ -55,16 +55,16 @@ def test_render_inline_formula_gets_baseline_em_style(tmp_path):
 
     assert not result["errors"]
     new_text = md.read_text(encoding="utf-8")
-    # Inline: em-scaled height, ``vertical-align: -descent_em`` (the true
-    # distance from the cropped image's bottom to the formula baseline —
-    # this is what drops the image until the formula baseline lands on the
-    # text baseline), small horizontal margin, inline flow. No max-height
-    # cap (the alpha-bbox crop already guarantees nothing is clipped, and
-    # a cap would squish tall fractions like \frac{...}{...}).
+    # Inline: WeChat ignores em on <img> and forces display:block on images
+    # in its editor, so the renderer pins an absolute 20px height that
+    # browsers honour (local preview / web view), while the small natural
+    # PNG size (~20px tall) carries the WeChat editor fallback. The small
+    # margin and vertical-align keep the formula in the text flow, on the
+    # text baseline; border:0 cancels WeChat's auto border on images.
     assert re.search(
-        r'!\[公式 f1\]\(formulas/f1\.png\)\{style="height:[\d.]+em;'
-        r'vertical-align:-[\d.]+em;margin:0 \.12em;width:auto;'
-        r'display:inline-block"\}',
+        r'!\[公式 f1\]\(formulas/f1\.png\)\{style="height:20px;'
+        r'width:auto;vertical-align:-3px;margin:0 3px 0 0;'
+        r'display:inline;border:0"\}',
         new_text,
     ), new_text
 
@@ -78,26 +78,27 @@ def test_render_block_formula_gets_block_style(tmp_path):
 
     assert not result["errors"]
     new_text = md.read_text(encoding="utf-8")
-    # Block: centered, em height, aspect-preserving caps (3em height /
-    # 92% width so a single tall display equation never eats the whole
-    # screen on mobile while still keeping the equation legible).
+    # Block: display:block + auto margins center the equation. No em height
+    # pinning (WeChat ignores it; the PNG is rendered at a sensible target
+    # size). max-width caps a pathologically wide equation; border:0
+    # cancels WeChat's auto border on images.
     assert re.search(
-        r'!\[公式 f1\]\(formulas/f1\.png\)\{style="display:block;margin:1\.2em auto;'
-        r'height:[\d.]+em;max-height:3em;max-width:92%;width:auto"\}',
+        r'!\[公式 f1\]\(formulas/f1\.png\)\{style="display:block;'
+        r'margin:1\.2em auto;max-width:96%;width:auto;height:auto;border:0"\}',
         new_text,
     ), new_text
 
 
-def test_inline_style_matches_render_metrics(tmp_path):
-    """The em values in the style must match the metrics returned by render.
+def test_inline_style_uses_px_workaround_and_metrics_consistent(tmp_path):
+    """Metrics describe the glyph box; the emitted style deliberately avoids em.
 
-    Inline formulas use ``vertical-align: -descent_em`` (NOT ``-ascent_em``).
-    The image's bottom edge sits on the text baseline by default; the
-    formula baseline is ``descent_em`` above that bottom. Lowering the
-    image by exactly ``descent_em`` places the formula baseline on the
-    text baseline — proper typographic alignment. Using ``-ascent_em``
-    instead would float the formula up by the cap-height, which is the
-    "公式显示不自然" bug the alpha-bbox + descent fix addresses.
+    WeChat's editor ignores ``em`` units on ``<img>`` and forces
+    ``display:block`` on images, so an em-sized formula would render at the
+    PNG's natural size on a line of its own, mid-sentence. The style
+    therefore uses an absolute px height (for browsers) and the renderer
+    keeps the PNG itself small (for the WeChat editor fallback). The
+    metrics stay internally consistent: the alpha-bbox crop guarantees
+    ascent + descent reconstructs the image height with no clipping.
     """
     md = tmp_path / "article.md"
     md.write_text("成本 $E=mc^2$ 结束\n", encoding="utf-8")
@@ -108,12 +109,15 @@ def test_inline_style_matches_render_metrics(tmp_path):
     assert not result["errors"]
     m = result["metrics"][1]
     new_text = md.read_text(encoding="utf-8")
-    assert f"height:{round(m['height_em'], 2):g}em" in new_text
-    assert f"vertical-align:-{round(m['descent_em'], 2):g}em" in new_text
-    # height_em must equal ascent_em + descent_em (the alpha-bbox crop
-    # gives a true ink extent, so ascent+descent reconstructs the full
-    # image height with no clipping).
+    # Metrics integrity: all positive, height == ascent + descent.
+    assert m["height_em"] > 0
+    assert m["ascent_em"] > 0
+    assert m["descent_em"] > 0
     assert abs(m["height_em"] - (m["ascent_em"] + m["descent_em"])) < 0.02
+    # The emitted style must not rely on em units on <img>.
+    style = re.search(r'\{style="([^"]+)"\}', new_text).group(1)
+    assert "em" not in style
+    assert "height:20px" in style
 
 
 def test_render_formulas_in_markdown(tmp_path):

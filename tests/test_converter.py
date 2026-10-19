@@ -41,15 +41,20 @@ def test_strip_unsupported_removes_div_and_class_everywhere():
 
 def test_inline_formula_baseline_aligned():
     """Inline formula image (already rendered by render_formulas.py) must stay
-    in the text flow with a negative vertical-align (baseline alignment)."""
+    in the text flow with a negative vertical-align (baseline alignment).
+
+    The converter re-normalizes formula images to the WeChat-safe style:
+    WeChat ignores em on <img> and forces display:block on images in its
+    editor, so the emitted style uses an absolute px height plus
+    display:inline instead of em-based sizing."""
     md = (
-        '成本 ![公式 f1](x.png){style="height:1.12em;vertical-align:-0.82em;'
-        'margin:0 2px;max-height:2.5em;width:auto;display:inline-block;'
-        'max-width:100%"} 结束\n'
+        '成本 ![公式 f1](x.png){style="height:20px;width:auto;'
+        'vertical-align:-3px;margin:0 3px 0 0;display:inline;border:0"} 结束\n'
     )
     html = _convert(md)
-    assert re.search(r"display:\s*inline-block", html)
+    assert re.search(r"display:\s*inline\b", html)
     assert re.search(r"vertical-align:\s*-", html)
+    assert re.search(r"height:\s*20px", html)
     assert not re.search(r"display:\s*block", html)
 
 

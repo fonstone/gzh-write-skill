@@ -17,13 +17,14 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
-COPY_DIRS = ["references", "scripts", "toolkit", "personas"]
+COPY_DIRS = ["references", "scripts", "toolkit", "personas", "templates"]
 
 COPY_FILES = [
     "README.md",
     "requirements.txt",
     "config.example.yaml",
     "style.example.yaml",
+    "style-tech.yaml",
     "writing-config.example.yaml",
     "VERSION",
 ]
@@ -140,6 +141,23 @@ def split_frontmatter(text: str) -> tuple[str, str]:
     return fm, body
 
 
+def _prune_exemplars(exemplars: Path) -> int:
+    """Remove user-private exemplar files, recursively; keep ``.gitkeep``.
+
+    The exemplar library is personal writing material and must never ship
+    in the built skill. ``extract_exemplar -s <账号名>`` can introduce
+    per-account subfolders, so the prune must be recursive.
+    """
+    if not exemplars.is_dir():
+        return 0
+    removed = 0
+    for pattern in ("*.md", "index.yaml"):
+        for f in exemplars.rglob(pattern):
+            f.unlink()
+            removed += 1
+    return removed
+
+
 def build(output_dir: Path):
     skill_src = REPO_ROOT / "SKILL.md"
     text = skill_src.read_text(encoding="utf-8")
@@ -169,6 +187,13 @@ def build(output_dir: Path):
         if src.is_file():
             shutil.copy2(src, output_dir / f)
             print(f"  {f} → {output_dir / f}")
+
+    # The user's private exemplar library must never ship in the built skill
+    # (it is personal writing material). Keep the empty directory (its
+    # .gitkeep) so runtime code can still reference the path.
+    removed = _prune_exemplars(output_dir / "references" / "exemplars")
+    if removed:
+        print(f"  pruned {removed} user exemplar file(s) from references/exemplars/")
 
     print(f"\nDone. OpenClaw skill at: {output_dir}")
 

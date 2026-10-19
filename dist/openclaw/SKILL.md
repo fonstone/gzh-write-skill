@@ -10,11 +10,13 @@ description: Use when working with 微信公众号/WeChat official accounts — 
 **角色**：用户的公众号内容编辑 Agent。
 
 **模式**：
-- **默认全自动**——一口气跑完 Step 1-8，不中途停下。只在出错时停。
+- **默认全自动**——一口气跑完 Step 1-8，不中途停下。只在出错时停。**发布动作例外**，受下方「发布授权」约束。
 - **交互模式**——用户说"交互模式"/"我要自己选"时，在选题/框架/配图处暂停。
 - **写作模式**：读取 `style.yaml` 的 `mode` 字段。wechat（默认，公众号写作）或 tech（技术科普）。在 Step 1.3 显示当前模式。
 
 **降级原则**：每一步都有降级方案。Step 1 检测到的降级标记（`skip_publish`、`skip_image_gen`）在后续 Step 自动生效，不重复报错。
+
+**发布授权**：默认交付**本地成稿**（preview + 文件路径），不推草稿箱。只有当用户当轮明确说「推送」「发布」「推草稿箱」，或 `config.yaml` 设置了 `publish.mode: auto`（旧版全自动行为）时，才执行 publish。
 
 **进度追踪**：主管道启动时，用 TaskCreate 为 8 个 Step 创建任务。每开始一个 Step 标记 `in_progress`，完成后标记 `completed`。用户可随时看到当前进度。
 
@@ -34,6 +36,8 @@ description: Use when working with 微信公众号/WeChat official accounts — 
   - **本地修改**（默认）：用户在 `output/` 的 markdown 文件中修改
   - **微信草稿箱同步**：`python3 {baseDir}/scripts/learn_edits.py --from-wechat`，自动从草稿箱拉回最新内容，与本地原文做纯文本 diff
 - 用户说"学习排版"/"学排版" → `python3 {baseDir}/scripts/learn_theme.py <url> --name <name>`，用户需提供一个公众号文章 URL 和主题名称。提取完成后提示用户设置 `style.yaml` 的 `theme` 字段。
+- 用户说"生成主题"/"做一个 XX 风格的主题" → `读取: {baseDir}/references/theme-generator.md`，按流程选择预设+主色并执行 `python3 {baseDir}/toolkit/cli.py theme-init <name> --primary "<#hex>" --style <preset>`
+- 用户说"改写成小红书"/"做成抖音口播稿" → `读取: {baseDir}/references/multiplatform-rewrite.md`，从最近成稿改写，独立产出（不覆盖原稿）
 - 用户说"学习这篇文章"/"导入范文" + URL → `python3 {baseDir}/scripts/fetch_article.py <url> -o /tmp/article.md && python3 {baseDir}/scripts/extract_exemplar.py /tmp/article.md -s <账号名>`，从公众号文章 URL 提取正文并导入范文库。支持三级降级（requests → Playwright → 手动 HTML）。
 - 用户说"看看文章数据" → `读取: {baseDir}/references/effect-review.md`
 - 用户说"检查一下"/"自检"/"这篇文章怎么样" → 对最近一篇生成的文章（或用户指定的文章）执行**四层自检金字塔**，输出标准质检报告：
@@ -117,6 +121,8 @@ cd {baseDir} && git fetch origin main --quiet 2>/dev/null
   - `mode == tech` → 额外加载 `{baseDir}/style-tech.yaml`，覆盖 name/tone/voice/topics/core_principles；`writing_persona` 强制设为 `tech-explainer`；告知用户"当前模式：技术科普（OS/AI/嵌入式）"
   - `mode == wechat` 或其他 → 保持原逻辑；**活人感四支柱启用**（wechat 模式专属：材料门槛 Step 3.3 / 说话位置 Step 4.0 / 局部问题推进 Step 4.4 / 交付禁令 Step 4.5+5.3，规范见 `references/human-prose.md`）；告知用户"当前模式：公众号写作"
 - 不存在 → `读取: {baseDir}/references/onboard.md`，完成后回到 Step 1
+
+**1.4 建立运行状态**（可降级）：`python3 {baseDir}/scripts/run_manager.py start --topic "{选题或空}" --mode {mode} --framework "{框架或空}"`。成功记下 run_id；之后每完成一个 Step 执行 `run_manager.py step {env|topic|framework|write|seo|visual|layout|wrapup} completed`；用户说"继续上次"时用 `run_manager.py status --json` 恢复进度与产物路径；脚本异常则降级为无状态执行。
 
 如果用户直接给了选题 → 跳到 Step 3（仍需框架选择和素材采集，不可跳过）。
 
@@ -212,12 +218,13 @@ python3 {baseDir}/scripts/topic_diagnosis.py "{选题}" --json --mode {mode}
 **3.1 框架选择**：
 
 ```
-读取: {baseDir}/references/frameworks.md
+if mode == tech:
+  读取: {baseDir}/references/tech-frameworks.md（5 套 tech 框架：原理演进/技术对比/实践指南/源码拆解/全景架构型）
+否则:
+  读取: {baseDir}/references/frameworks.md（7 套框架：痛点/故事/清单/对比/热点解读/纯观点/复盘）
 ```
 
-7 套框架（痛点/故事/清单/对比/热点解读/纯观点/复盘），自动选推荐指数最高的。
-
-如果 mode=tech，额外加载 `{baseDir}/references/tech-frameworks.md`，合并到框架选择列表中（新增 5 套：原理演进/技术对比/实践指南/源码拆解/全景架构型）。全景架构型用于多层技术全景主题（如 AI Infra 全栈），叙事逻辑为"定位→扫描→锁定→深挖→验证"。
+wechat 模式从 frameworks.md 自动选推荐指数最高的；tech 模式从 tech-frameworks.md 自动选推荐指数最高的（全景架构型用于多层技术全景主题，如 AI Infra 全栈，叙事逻辑为"定位→扫描→锁定→深挖→验证"）。
 
 选定框架后，**记住框架名称**（如"全景架构型"），后续 Step 4.5 和 Step 5 调用 `l1_hard_rules.py` 时需追加 `--framework <所选框架>` 以激活框架级代码块数量下限和 P0 四象限覆盖检查。
 
@@ -241,8 +248,9 @@ python3 {baseDir}/scripts/topic_diagnosis.py "{选题}" --json --mode {mode}
 每次搜索 2 轮，从结果中**同时**提取：
 1. **素材**：5-8 条真实素材（具名来源 + 具体数据/引述/案例）。**禁止编造**。
 2. **增强材料**：按 content-enhance.md 对应策略的要求提取（角度/密度要点/细节/用户声音）。
+3. **来源台账**（可降级）：先确定成稿路径（Step 4 将写入的 `{baseDir}/output/{date}-{slug}.md`），每条素材入大纲前登记：`python3 {baseDir}/scripts/source_ledger.py add --article {baseDir}/output/{date}-{slug}.md --url "{URL}" --title "{标题}" --excerpt "{原句摘录或数字+单位上下文，≤200 字}"`。`excerpt` 必填（Step 5 声明核验的证据）；脚本失败跳过。
 
-两者并入框架大纲，一起传入 Step 4 写作。
+素材与增强材料并入框架大纲，一起传入 Step 4 写作。
 
 **降级**：web_search 不可用 → 用 LLM 训练数据中可验证的公开信息。但需告知用户："素材采集未能使用 web_search，建议在编辑锚点处多加入你自己的内容。"密度强化不依赖搜索，始终执行。
 
@@ -312,7 +320,7 @@ if mode == tech:
 读取: {baseDir}/references/exemplars/index.yaml（如果存在）
 ```
 
-**4.0 说话位置**（wechat 与 tech 双模式，动笔前内部回答，答案不交给用户；tech 版五问见 `{baseDir}/references/tech-prose.md` 第 2 节）：
+**4.0 说话位置**（wechat 与 tech 双模式，动笔前内部回答，答案不交给用户；tech 模式专用的五问见 `{baseDir}/references/tech-prose.md` 第 2 节）：
 
 1. 谁在说这件事。他凭什么知道，又有哪些地方只是在推测。
 2. 什么事情让他现在想说。一条新闻、一次经历、一个疑问都可以。
@@ -407,21 +415,18 @@ Category 映射规则：
 **4.4 写文章**：
 
 ```
-读取: {baseDir}/references/article-archetypes.md
-读取: {baseDir}/references/style-examples.md
-读取: {baseDir}/references/tech-narrative-architecture.md（技术叙事驱动法——将散点知识转化为"背景→问题→演进→方案"叙事线，配合 tech-frameworks.md 使用，决定了整篇文章的叙事弧线）
-读取: {baseDir}/references/tech-writing-persuasion.md（技术写作说服力——Cialdini七原则+RISE段落节奏+注意力引导系统，与叙事架构配合：叙事线决定讲什么，说服力决定为什么继续读）
-读取: {baseDir}/references/ai-patterns.md（AI 刻板模式三层扫描 + 自然度评分体系，写完初稿后做风格自检）
-读取: {baseDir}/references/ai-patterns-examples.md（AI 模式反面示例 + 正向改写对照，用于改稿阶段参考）
 if mode == tech:
-  读取: {baseDir}/references/tech-writing-guide.md（写作规范，含开头层/行文层/内容层/结尾层）
   读取: {baseDir}/references/tech-frameworks.md（框架扩展）
-  读取: {baseDir}/references/headline_templates.md（标题生成 SOP——强制使用三类模板之一，标题必须通过三项质检）
-  读取: {baseDir}/references/ending_templates.md（结尾模板库——写作 SOP 最后一步，不可跳过）
-  读取: {baseDir}/references/tech-common-pitfalls.md（问题驱动写作法的踩坑库配套）
+  读取: {baseDir}/references/tech-narrative-architecture.md（技术叙事驱动法——将散点知识转化为"背景→问题→演进→方案"叙事线，配合 tech-frameworks.md 使用，决定了整篇文章的叙事弧线）
+  读取: {baseDir}/references/tech-writing-persuasion.md（技术写作说服力——Cialdini七原则+RISE段落节奏+注意力引导系统，与叙事架构配合：叙事线决定讲什么，说服力决定为什么继续读）
+否则:
+  读取: {baseDir}/references/article-archetypes.md（5 种写作原型：调查实验/产品体验/现象解读/工具分享/方法论）
+  读取: {baseDir}/references/style-examples.md（风格示范段落：模仿其句长节奏、情绪强度与口语化程度）
 ```
 
-先判断文章属于哪种**写作原型**：wechat 模式使用 article-archetypes.md 的 5 种原型（调查实验/产品体验/现象解读/工具分享/方法论）；tech 模式使用 tech-frameworks.md 的 4 种框架（原理演进/技术对比/实践指南/源码拆解）。
+先判断文章属于哪种**写作原型**：wechat 模式使用 article-archetypes.md 的 5 种原型（调查实验/产品体验/现象解读/工具分享/方法论）；tech 模式使用 tech-frameworks.md 的 5 套框架（原理演进/技术对比/实践指南/源码拆解/全景架构型）。
+
+**改稿与磨稿**（重写或打磨时）：wechat 模式读取 `{baseDir}/references/writing-techniques.md`（写作手法/核心进阶技法/磨/中文重写）；改稿参考 `{baseDir}/references/ai-patterns-examples.md`（AI 模式反面示例 + 正向改写对照）。
 
 **标题生成 SOP（tech 模式强制）**：
 1. 按 headline_templates.md 的三类模板（痛点共鸣型/好奇揭秘型/对比选型型）生成 3 个备选标题
@@ -540,10 +545,8 @@ python3 {baseDir}/scripts/render_formulas.py {article_path} -o {baseDir}/output/
 
 **叙事骨架检查**（tech 模式）：按 tech-narrative-architecture.md 四项检查：背景有张力（具体年代/硬件/场景）、问题场景化且有取舍、演进有轨迹（试错+突破+外部驱动力）、方案解释了取舍和开放问题。
 
-**AI 模式扫描**（wechat + tech 均适用）：
-```
-读取: {baseDir}/references/ai-patterns.md
-```
+**AI 模式扫描**（wechat + tech 均适用；复用 Step 4 已加载的 ai-patterns.md，不重复加载）：
+
 对全文做三层扫描：短语层（废话开场/强调拐杖/互联网黑话/副词/套话/元评论/假亲密/绝对化）→ 句式层（二元对比/否定铺陈/设问/假拟人/旁白叙事/翻译腔/Wh-开头/破碎短句）→ 节奏层（三连列表/破折号/程式化段尾/"So"段首）。全部通过后，做自然度评分（5 维度 1-10 分，≥ 40 通过）。
 
 **tech 模式快速自检替换**：如果 mode=tech，用 tech-writing-guide.md 附录中的校验清单替换原 12 项快速自检。重点检查：
@@ -596,6 +599,15 @@ if mode == tech:
 ```bash
 python3 {baseDir}/scripts/l1_hard_rules.py {article_path} --json --mode {mode} {tech_framework_flag}
 ```
+
+聚合入口（一次跑完 源侧 lint + 动作级禁令 + L1 硬规则，可选 HTML 双门与人味分；exit 0 = 无 ERROR 级问题，`--json` 供 CI/自检解析）：
+
+```bash
+python3 {baseDir}/toolkit/cli.py check {article_path} --mode {mode} [--tech] [--html {output}.html] [--framework <框架>] [--deep] [--json]
+```
+
+各项细则仍以对应脚本的输出为准，聚合报告只做汇总裁决。
+
 - wechat 模式：覆盖 L1-1~L1-6：禁用词/禁用标点/结构套话/空泛工具名/假设性例子/AI 角色边界 + 追加 `python3 {baseDir}/scripts/check_prose.py {article_path}`（L1-7 翻案腔 0 容忍/冒号仅限引原话/破折号/黑话/模型路标，失败项清零）
 - tech 模式：覆盖 L1-1~L1-6：技术编造扫描/API验证/类比局限性/代码可运行/术语管理/数字单位 + 框架级代码块数量下限 + P0 四象限覆盖检查（需设置 `{tech_framework_flag}` 为 `--framework <所选框架>`）+ 术语表出处核验（L1-8：`acronym_first_use`/`terminology_unexplained`/`glossary` 三项命中 = 0，见 tech-self-check-pyramid.md）+ 追加 `python3 {baseDir}/scripts/check_prose.py {article_path} --tech`（中文韵律：翻案句 0 容忍/破折号 0/提示性冒号 0，技术格式冒号豁免，失败项清零；警告项进 L2 人工确认）
 - 命中即逐个定向替换，不留到人工
@@ -609,6 +621,15 @@ python3 {baseDir}/scripts/verify_paper.py {article_path} --assets {baseDir}/outp
 - 四类检查：图号引用 / 章节引用 / 数据锚点 / 论文元数据
 - `not_found`（图号不存在、元数据缺失）→ 强制修复后才能进 Step 6
 - `needs_human_check`（章节引用未命中、数据锚点未找到近似匹配）→ 进 L3 人工确认
+
+声明核验（有来源台账时执行，advisory）：
+
+```bash
+python3 {baseDir}/scripts/claims_audit.py {article_path} --paper-assets {baseDir}/output/paper-assets/
+```
+
+- 把正文的数字声明/引语与来源台账的 excerpt 逐条对照
+- `unsupported` 的声明逐条处理：补登记来源 excerpt，或改写/删除该声明；`weak` 提示补充精确来源。不阻断流程
 
 **L2 风格一致性模式匹配**（半自动）：
 - wechat：开头/节奏/口语化/断裂句/标点/回环呼应/情绪落差 + check_prose.py 警告项人工确认（句长变异系数/连词密度/同构排比/借喻簇/短段连排/重复开场）+ 假细节扫描（L2-6，见 self-check-pyramid.md）
@@ -776,13 +797,14 @@ python3 {baseDir}/toolkit/cli.py publish {markdown} --theme tech-pro --tech --co
 
 **7.2 排版 + 发布**：
 
+**发布授权检查（先于一切发布动作）**：读取 `config.yaml` 的 `publish` 段（缺省视为 `publish.mode: confirmation`）：
+- `publish.mode: confirmation`（默认）且用户当轮未明确要求发布 → **只执行 preview**，交付本地 HTML 与 Markdown 路径
+- `publish.mode: confirmation` 且用户当轮明确要求发布 → 执行 publish
+- `publish.mode: auto`（旧版行为）→ 配置齐全即发布
+
 **如果 `skip_publish = true`** → 直接走 preview。
 
-```
-读取: {baseDir}/references/wechat-constraints.md
-```
-
-Converter 自动处理：CJK 加空格、加粗标点外移、列表转 section、外链转脚注、暗黑模式、容器语法。tech 模式额外启用 tech-enhance（代码块高亮、行内标识符分类着色、参数表格样式）。
+Converter 自动处理微信平台限制与修复（CJK 加空格、加粗标点外移、列表转 section、外链转脚注、暗黑模式、容器语法；规则清单见开发参考 `{baseDir}/references/wechat-constraints.md`，无需主动加载）。tech 模式额外启用 tech-enhance（代码块高亮、行内标识符分类着色、参数表格样式）。
 
 **7.2.1 自动排版预处理（参考 gzh-design-skill 智能处理，preview/publish 自动执行）**：在 Converter 之前，CLI 会对源 Markdown 跑一遍 `toolkit/layout.py` 排版预处理，把普通文章增强为更适合公众号的版本。全部确定性、幂等，不增删原文实质内容：
 
@@ -829,6 +851,15 @@ python3 {baseDir}/toolkit/cli.py validate {output}.html
 
 **8.1 写入历史**（推送成功或降级都要写，文件不存在则创建）：
 
+**优先方式（run_manager）**——先 `update --patch` 写齐生成档案字段（article/topic/framework/material_gate/flags；缺失字段可省略；writing_config_snapshot 可选），再 `finish --json` 封存落账（重复执行幂等）：
+
+```bash
+python3 {baseDir}/scripts/run_manager.py update --patch '{"artifacts": {"article": "{output_file}"}, "topic": {"title": "{标题}", "keywords": ["{词1}"], "source": "{热点抓取|用户指定}"}, "framework": "{框架}", "material_gate": "{passed|compressed}", "flags": {"word_count": {N}, "writing_persona": "{人格}", "dimensions": ["{维度: 选项}"], "closing_type": "{收尾类型}", "composite_score": {分}, "media_id": "{id 或 null}", "enhance_strategy": "{angle_discovery|density_boost|detail_anchoring|real_feel}", "paper_sources": ["{arXiv id}"]}}'
+python3 {baseDir}/scripts/run_manager.py finish --json
+```
+
+**兜底方式（脚本不可用/失败）**——按下方结构手动追加到 history.yaml：
+
 ```yaml
 # → {baseDir}/history.yaml
 - date: "{日期}"
@@ -861,6 +892,7 @@ python3 {baseDir}/toolkit/cli.py validate {output}.html
 
 **8.2 回复用户**：
 
+- 交付说明：默认给**本地成稿路径**（未推送时提示「说『推送』即可发到草稿箱」）；已推送则附 media_id
 - 最终标题 + 2 备选 + 摘要 + 5 标签 + media_id
 - 编辑建议："文章有 2-3 个编辑锚点，建议加入你自己的话。你可以在本地 markdown 里改，也可以直接在微信草稿箱改——改完后说**'学习我的修改'**，GzhWrite 都能学到你的风格。"
 
@@ -872,16 +904,14 @@ python3 {baseDir}/toolkit/cli.py validate {output}.html
 | 封面换暖色调 | 重新生图 |
 | 用框架 B 重写 | 回到 Step 4 |
 | 换一个选题 | 回到 Step 2.3 |
+| 继续上次 / 查看进度 | `python3 {baseDir}/scripts/run_manager.py status --json`（最近一篇的步骤进度与产物路径） |
+| 生成新主题 | `python3 {baseDir}/toolkit/cli.py theme-init <name> --primary "#hex" --style minimal\|tech\|warm\|editorial`（流程见 `references/theme-generator.md`） |
 | 看看有什么主题 | `python3 {baseDir}/toolkit/cli.py gallery` |
 | 用 Doocs 排版 / Doocs 主题 | `python3 {baseDir}/toolkit/cli.py preview {markdown} --layout-source doocs --doocs-theme default --no-open -o {output}.html`（发布把 `preview` 换 `publish`，主题 default/grace/simple 任选） |
 | 换成 XX 主题 | 重新渲染 |
-| 看看文章数据 | `读取: {baseDir}/references/effect-review.md` |
-| 学习我的修改 | `读取: {baseDir}/references/learn-edits.md`。支持本地 markdown 修改和微信草稿箱同步（`--from-wechat`） |
-| 学习排版 / 学排版 | `python3 {baseDir}/scripts/learn_theme.py <url> --name <name>` |
 | 做一个小绿书/图片帖 | `python3 {baseDir}/toolkit/cli.py image-post img1.jpg img2.jpg -t "标题"` |
 | 检查一下 / 自检 / 这篇文章怎么样 | 生成报告（生成档案 + 质量检查，见辅助功能） |
-| 导入范文 / 建范文库 | `python3 {baseDir}/scripts/extract_exemplar.py article.md` |
-| 查看范文库 | `python3 {baseDir}/scripts/extract_exemplar.py --list` |
+| 数据复盘 / 学习修改 / 学习排版 / 范文库 / 改写成小红书或抖音口播 | 见上文「辅助功能」各条目（命令与降级说明同那里） |
 
 ---
 

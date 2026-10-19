@@ -16,9 +16,9 @@ optimization-results.tsv
 output/
 !output/.gitkeep
 
-# Exemplar library (user-specific content)
-references/exemplars/*.md
-references/exemplars/index.yaml
+# Exemplar library (user-specific content, possibly nested per account)
+references/exemplars/**/*.md
+references/exemplars/**/index.yaml
 
 # Legacy client directories
 clients/
@@ -31,6 +31,7 @@ __pycache__/
 *.pyc
 *.pyo
 *.egg-info/
+.pytest_cache/
 dist/*
 !dist/openclaw/
 build/
@@ -48,6 +49,9 @@ khazix-skills/
 
 # WorkBuddy project runtime memory (not source)
 .workbuddy/
+
+# Superpowers session artifacts (local process files, not source)
+.superpowers/
 
 # CodeGraph runtime index (generated, not source)
 .codegraph/

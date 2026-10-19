@@ -1,0 +1,37 @@
+name: Checks
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'SKILL.md'
+      - 'references/**'
+      - 'scripts/**'
+      - 'toolkit/**'
+      - 'personas/**'
+      - 'templates/**'
+      - 'tests/**'
+      - 'evals/**'
+      - 'requirements.txt'
+      - '.github/workflows/checks.yml'
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install minimal test dependencies
+        run: >
+          pip install markdown beautifulsoup4 cssutils requests pyyaml
+          Pygments Pillow PyMuPDF matplotlib pytest
+      - name: Tests
+        run: python -m pytest tests/ -q
+      - name: Context budget (wechat)
+        run: python scripts/context_budget.py --mode wechat --budget-tokens 66740
+      - name: Context budget (tech)
+        run: python scripts/context_budget.py --mode tech --budget-tokens 80300

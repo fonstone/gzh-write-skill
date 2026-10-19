@@ -10,6 +10,7 @@ on:
       - 'scripts/**'
       - 'toolkit/**'
       - 'personas/**'
+      - 'templates/**'
       - 'requirements.txt'
       - '*.example.yaml'
 
@@ -39,6 +40,6 @@ jobs:
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else
-            git commit --amend --no-edit
-            git push --force-with-lease
+            git commit -m "chore: rebuild dist/openclaw [skip ci]"
+            git push
           fi

@@ -53,6 +53,11 @@
 | 活人感四支柱 | 材料门槛 / 说话位置 / 局部问题推进 / 交付禁令（wechat 模式） | `references/human-prose.md` + `scripts/check_prose.py` |
 | 排版学习 | 从任意公众号文章 URL 提取排版主题 | `scripts/learn_theme.py` |
 | 文章采集 | 从公众号 URL 提取正文为 Markdown | `scripts/fetch_article.py` |
+| 运行状态机 | 每篇独立 run：断点续跑（"继续上次"）、并发隔离、收尾自动落账 | `scripts/run_manager.py` |
+| 来源台账 + 声明核验 | 素材带证据登记；成稿的数字/引语自动与证据对照（advisory） | `scripts/source_ledger.py` + `scripts/claims_audit.py` |
+| 统一质检 | 一条命令跑完 源侧 lint/动作级禁令/L1（可选 HTML 双门、人味分），退出码可接 CI | `toolkit/cli.py check` |
+| 主题生成器 | 主色 + 4 风格预设确定性生成主题（含暗色模式与对比度校验） | `toolkit/cli.py theme-init` |
+| 多平台改写 | 小红书图文 / 抖音口播稿规格与流程 | `references/multiplatform-rewrite.md` |
 
 ### 技术科普专项能力（tech 模式）
 
@@ -230,6 +235,15 @@ cd ~/.openclaw/skills/gzh-write && pip install -r requirements.txt
 
 安装后 skill 会在每次运行时自动检查新版本。有更新时说"更新"即可升级。
 
+也可以直接用安装脚本（macOS / Linux）：
+
+```bash
+git clone --depth 1 https://github.com/fonstone/gzh-write-skill.git /tmp/gzh && bash /tmp/gzh/install.sh
+# Claude Code：bash /tmp/gzh/install.sh --agent claude
+# 本地检出（尚未推送时）：bash install.sh --from-local .
+# 自定义目录：bash install.sh --dir ~/custom/gzh-write
+```
+
 ### 配置（可选）
 
 ```bash
@@ -237,6 +251,16 @@ cp config.example.yaml config.yaml
 ```
 
 填入微信公众号 `appid`/`secret`（推送需要）和图片 API key（生图需要）。不配也能用——自动降级为本地 HTML + 输出图片提示词。
+
+### 发布策略（默认不自动推送）
+
+管道完成后交付**本地成稿**（预览 + 文件路径）；只有你当轮明确说「推送/发布/推草稿箱」才会推送草稿箱。要恢复旧版"配置齐全即自动推送"：
+
+```yaml
+# config.yaml
+publish:
+  mode: "auto"
+```
 
 排版主题支持两种来源：内置 20 套主题（`theme` 字段），或复用 **md.doocs.org 官方排版**（`layout.source: doocs`，可选 `default`/`grace`/`simple` 主题与主色覆盖）。详见 `config.example.yaml` 的 `layout` 段与 SKILL.md「Step 7.0.1」。
 
@@ -299,11 +323,19 @@ gzh-write-skill/
 │   ├── extract_exemplar.py     # 范文风格提取（SICO 式 few-shot 建库）
 │   ├── learn_theme.py          # 从公众号文章 URL 提取排版主题
 │   ├── fetch_article.py        # 从公众号 URL 提取正文为 Markdown
+│   ├── fetch_paper.py          # 论文素材包（arXiv 搜索 / PDF 提取）
+│   ├── verify_paper.py         # 论文引用验证（图号/章节/数据锚点/元数据）
+│   ├── render_formulas.py      # 公式渲染（formula_mode: image 时）
+│   ├── run_manager.py          # 运行状态机（start/step/status/finish，断点续跑）
+│   ├── source_ledger.py        # 来源台账（素材登记 + excerpt 证据）
+│   ├── claims_audit.py         # 声明核验（数字/引语 ↔ 证据，advisory）
+│   ├── context_budget.py       # 上下文加载量测量（CI 预算门禁）
 │   ├── diagnose.py             # 配置完备度检查
 │   └── build_openclaw.py       # SKILL.md → OpenClaw 格式转换
 │
 ├── toolkit/                    # Markdown → 微信工具链
-│   ├── cli.py                  # CLI（preview / publish / layout / validate / gallery / themes / image-post）
+│   ├── cli.py                  # CLI（preview / publish / layout / validate / check / theme-init / gallery / themes / image-post）
+│   ├── theme_gen.py            # 主题生成器（主色 + 预设 → 完整主题 YAML，含暗色与对比度校验）
 │   ├── validate_html.py        # 输出端合规校验（双门 QA：禁用标签/CSS + image 模式公式残留 + 标点检查）
 │   ├── component_lint.py       # 源侧 lint（第一道门：image 模式未渲染公式/裸标签/半角标点 + 行号；latex 模式接受原始 $...$）
 │   ├── layout.py               # 排版预处理（全角标点/章节编号/目录/签名区/英文标签/下划线）
@@ -325,6 +357,7 @@ gzh-write-skill/
 │
 ├── references/                 # Agent 按需加载
 │   ├── writing-guide.md        # 公众号写作规范
+│   ├── writing-techniques.md   # 写作进阶技法（写作手法/核心技法/磨/中文重写，磨稿阶段加载）
 │   ├── human-prose.md          # 活人感四支柱（wechat 模式：材料门槛/说话位置/局部问题推进/交付禁令，源自 human-writing MIT）
 │   ├── frameworks.md           # 通用五段式骨架 + 7 种写作框架
 │   ├── content-enhance.md      # 4 增强策略 + 4 共性高分动作
@@ -349,13 +382,15 @@ gzh-write-skill/
 │   ├── ai-patterns-examples.md # [通用] AI 模式反面示例 + 正向改写对照
 │   ├── headline_templates.md   # [tech] 标题模板库（3 类模板 + 3 项质检）
 │   ├── ending_templates.md     # [tech] 结尾模板库（金句/互动/延伸）
-│   └── tech-common-pitfalls.md # [tech] 领域常见踩坑库（OS/AI/嵌入式）
+│   ├── tech-common-pitfalls.md # [tech] 领域常见踩坑库（OS/AI/嵌入式）
+│   ├── theme-generator.md      # 主题生成器使用流程（theme-init）
+│   └── multiplatform-rewrite.md # 小红书 / 抖音口播改写规格
 │
-├── output/                     # 生成的文章（tech 模式使用 -tech- 前缀）
-└── evals/                      # 评估用例
+├── output/                     # 生成的文章（tech 模式使用 -tech- 前缀）；runs/<id>/ 为运行状态；<article>.sources.yaml 为来源台账
+└── evals/                      # 评估用例（golden fixtures 已接入 pytest）
 ```
 
-运行时自动生成（不入 git）：`style.yaml`、`history.yaml`、`playbook.md`、`writing-config.yaml`、`references/exemplars/*.md`
+运行时自动生成（不入 git）：`style.yaml`、`history.yaml`、`playbook.md`、`writing-config.yaml`、`references/exemplars/*.md`、`output/runs/`、`output/<article>.sources.yaml`
 
 ## 工作流程
 
@@ -448,6 +483,12 @@ python3 scripts/extract_exemplar.py --list                   # 查看范文库
 
 # 文章质量检查
 python3 scripts/humanness_score.py article.md --verbose
+
+# 统一质检（源侧 lint + 动作级禁令 + L1；可加 --html / --deep / --json）
+python3 toolkit/cli.py check article.md --mode wechat
+
+# 生成主题（主色 + 风格预设，产物可直接 --theme 使用）
+python3 toolkit/cli.py theme-init my-theme --primary "#0f766e" --style tech
 
 # 叙事线审计（检查每个 H2 是否覆盖背景/问题/演进/方案）
 python3 scripts/narrative_audit.py article.md

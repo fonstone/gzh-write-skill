@@ -86,3 +86,9 @@ layout:
 #           MathJax/KaTeX 的工具）负责显示。md 始终可编辑，显示最自然（默认）。
 #   image —— 预渲染为 PNG 图片（render_formulas.py），兼容不支持 LaTeX 的发布链路。
 formula_mode: latex
+
+# 发布策略
+#   confirmation（默认）—— 管道完成后交付本地成稿；只有你当轮明确说「推送/发布/推草稿箱」才推草稿箱
+#   auto                —— 旧版行为：配置齐全时自动推送草稿箱
+publish:
+  mode: "confirmation"

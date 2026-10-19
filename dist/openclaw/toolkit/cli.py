@@ -22,6 +22,17 @@ from publisher import create_draft, create_image_post
 from validate_html import validate as validate_html
 from component_lint import lint_markdown as lint_source
 from layout import layout_markdown, LayoutOptions
+from theme_gen import generate_theme_yaml, validate_theme
+
+# Windows consoles often default to GBK; emoji/rare glyphs in our reports
+# would crash mid-command with UnicodeEncodeError. Allow graceful
+# replacement instead — exit codes and file output stay intact.
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        try:
+            _stream.reconfigure(errors="replace")
+        except (ValueError, OSError):
+            pass
 
 # Config file search order
 CONFIG_PATHS = [
@@ -601,6 +612,177 @@ function selectTheme(name) {{
 </html>"""
 
 
+def cmd_theme_init(args):
+    """Generate a new theme YAML from a primary color + style preset."""
+    try:
+        text = generate_theme_yaml(
+            args.name, args.primary, style=args.style,
+            description=args.description or "",
+        )
+    except ValueError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        sys.exit(2)
+
+    result = validate_theme(text)
+    if not result["ok"]:
+        print("Error: generated theme failed validation:", file=sys.stderr)
+        for w in result["warnings"]:
+            print(f"  - {w}", file=sys.stderr)
+        sys.exit(2)
+
+    default_dir = Path(__file__).parent / "themes"
+    out_dir = Path(args.output) if args.output else default_dir
+    out_dir.mkdir(parents=True, exist_ok=True)
+    path = out_dir / f"{args.name}.yaml"
+    if path.exists() and not args.force:
+        print(f"Error: {path} already exists (use --force to overwrite)", file=sys.stderr)
+        sys.exit(1)
+    path.write_text(text, encoding="utf-8")
+
+    for w in result["warnings"]:
+        print(f"warning: {w}", file=sys.stderr)
+    print(f"Theme written: {path}")
+    print(f"Preview with:  python3 toolkit/cli.py preview article.md --theme {args.name}")
+    if out_dir != default_dir:
+        print("Note: CLI 从 toolkit/themes/ 发现主题；把它复制过去即可用 --theme 引用。")
+
+
+def cmd_check(args):
+    """Unified QA: source lint + prose bans + L1 hard rules (+ optional HTML/deep).
+
+    Composes the gates the pipeline already runs into one command with a
+    single verdict: exit 0 = no ERROR-level findings; 1 = at least one.
+    """
+    import json
+    import os
+    import subprocess
+
+    article = Path(args.article)
+    if not article.exists():
+        print(f"Error: {article} not found", file=sys.stderr)
+        sys.exit(2)
+    text = article.read_text(encoding="utf-8")
+    repo_root = Path(__file__).resolve().parent.parent
+    py = sys.executable
+    sections: dict = {}
+    problems = 0
+
+    # formula_mode must match preview/publish semantics: a raw $...$ is an
+    # error only in image mode (forgotten render_formulas step).
+    formula_mode = args.formula_mode or load_config().get("formula_mode", "latex")
+
+    # Child scripts must emit UTF-8 regardless of the console codepage
+    # (Windows GBK consoles otherwise corrupt the captured report).
+    child_env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
+
+    def _run_script(cmd):
+        proc = subprocess.run(cmd, capture_output=True, env=child_env)
+        out = (proc.stdout or b"").decode("utf-8", errors="replace")
+        err = (proc.stderr or b"").decode("utf-8", errors="replace")
+        return proc.returncode, out, err
+
+    # 1) Source-side lint (first gate) — in-process.
+    lint = lint_source(text, name=str(article), formula_mode=formula_mode)
+    sections["component_lint"] = {
+        "errors": lint.get("errors", []),
+        "warnings": lint.get("warnings", []),
+    }
+    problems += len(sections["component_lint"]["errors"])
+
+    # 2) Prose bans (翻案句/冒号/破折号/黑话/统计形状) — the script is the
+    #    source of truth for these rules.
+    cmd = [py, str(repo_root / "scripts" / "check_prose.py"), str(article)]
+    if args.tech:
+        cmd.append("--tech")
+    code, out, err = _run_script(cmd)
+    sections["prose"] = {
+        "exit_code": code,
+        "report": (out + err).strip(),
+    }
+    if code != 0:
+        problems += 1
+
+    # 3) L1 hard rules — the script emits machine-readable JSON.
+    cmd = [py, str(repo_root / "scripts" / "l1_hard_rules.py"), str(article),
+           "--json", "--mode", args.mode]
+    if args.framework:
+        cmd += ["--framework", args.framework]
+    code, out, err = _run_script(cmd)
+    try:
+        l1 = json.loads(out)
+    except (json.JSONDecodeError, TypeError):
+        l1 = {
+            "summary": {"passed": False, "total_hits": None},
+            "error": (err or out or "").strip()[:500],
+        }
+    summary = l1.get("summary", {})
+    sections["l1"] = {
+        "passed": bool(summary.get("passed")),
+        "total_hits": summary.get("total_hits"),
+        "details": {
+            k: v for k, v in l1.items() if k not in ("summary", "error") and v
+        },
+    }
+    if "error" in l1:
+        sections["l1"]["error"] = l1["error"]
+    if not sections["l1"]["passed"]:
+        problems += 1
+
+    # 4) Output-side HTML validation (second gate) — optional.
+    if args.html:
+        html_path = Path(args.html)
+        if not html_path.exists():
+            print(f"Error: {html_path} not found", file=sys.stderr)
+            sys.exit(2)
+        v = validate_html(html_path.read_text(encoding="utf-8"),
+                          name=str(html_path), formula_mode=formula_mode)
+        sections["html"] = {
+            "errors": v.get("errors", []),
+            "warnings": v.get("warnings", []),
+        }
+        problems += len(sections["html"]["errors"])
+    else:
+        sections["html"] = None
+
+    # 5) Humanness score — optional, advisory (does not affect the verdict).
+    if args.deep:
+        cmd = [py, str(repo_root / "scripts" / "humanness_score.py"),
+               str(article), "--json"]
+        code, out, err = _run_script(cmd)
+        try:
+            hum = json.loads(out)
+            sections["humanness"] = {"composite_score": hum.get("composite_score")}
+        except (json.JSONDecodeError, TypeError):
+            sections["humanness"] = {
+                "error": (err or "").strip()[:300] or "unparseable output"
+            }
+    else:
+        sections["humanness"] = None
+
+    verdict = "fail" if problems else "pass"
+    report = {"verdict": verdict, "sections": sections}
+
+    if args.json:
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+    else:
+        cl = sections["component_lint"]
+        print(f"源侧 lint   : {len(cl['errors'])} ERROR / {len(cl['warnings'])} WARNING")
+        print(f"动作级禁令  : exit {sections['prose']['exit_code']}")
+        if sections["prose"]["exit_code"] != 0 and sections["prose"]["report"]:
+            for line in sections["prose"]["report"].splitlines()[:12]:
+                print(f"   {line}")
+        l1s = sections["l1"]
+        print(f"L1 硬规则   : {l1s['total_hits']} 命中 (passed={l1s['passed']})")
+        if sections["html"] is not None:
+            print(f"HTML 双门   : {len(sections['html']['errors'])} ERROR / "
+                  f"{len(sections['html']['warnings'])} WARNING")
+        if sections["humanness"] is not None:
+            print(f"人味分      : {sections['humanness'].get('composite_score', '?')}")
+        print(f"结论        : {'pass' if verdict == 'pass' else 'fail'}")
+
+    sys.exit(0 if verdict == "pass" else 1)
+
+
 def main():
     parser = argparse.ArgumentParser(
         prog="gzh-write",
@@ -683,6 +865,27 @@ def main():
     p_val = sub.add_parser("validate", help="Validate a WeChat HTML file for platform compliance (dual-gate QA)")
     p_val.add_argument("file", help="HTML file to validate")
 
+    # check（统一质检）
+    p_check = sub.add_parser("check", help="Unified QA: source lint + prose bans + L1 hard rules (+ optional HTML/deep)")
+    p_check.add_argument("article", help="Markdown file path")
+    p_check.add_argument("--html", default=None, help="Generated HTML to validate (output-side gate)")
+    p_check.add_argument("--mode", choices=("wechat", "tech"), default="wechat", help="l1 mode (default: wechat)")
+    p_check.add_argument("--tech", action="store_true", help="Prose checks in tech mode (technical-format colon exemptions)")
+    p_check.add_argument("--framework", default=None, help="tech framework name (l1 code-block minimums)")
+    p_check.add_argument("--formula-mode", choices=("latex", "image"), default=None,
+                         help="公式承载方式（默认读 config.yaml）：latex=原始 $...$ 为预期；image=未渲染公式判 ERROR")
+    p_check.add_argument("--deep", action="store_true", help="Also run humanness_score (advisory)")
+    p_check.add_argument("--json", action="store_true", help="Machine-readable report")
+
+    # theme-init（主题生成器）
+    p_themeinit = sub.add_parser("theme-init", help="Generate a theme YAML from a primary color + style preset")
+    p_themeinit.add_argument("name", help="Theme name (letters/digits/-/_)")
+    p_themeinit.add_argument("--primary", required=True, help="Primary color, e.g. #0f766e")
+    p_themeinit.add_argument("--style", choices=("minimal", "tech", "warm", "editorial"), default="minimal")
+    p_themeinit.add_argument("--description", default="", help="Theme description")
+    p_themeinit.add_argument("--output", default=None, help="Output directory (default: toolkit/themes/)")
+    p_themeinit.add_argument("--force", action="store_true", help="Overwrite an existing theme file")
+
     args = parser.parse_args()
 
     try:
@@ -700,6 +903,10 @@ def main():
             cmd_learn_theme(args)
         elif args.command == "validate":
             cmd_validate(args)
+        elif args.command == "check":
+            cmd_check(args)
+        elif args.command == "theme-init":
+            cmd_theme_init(args)
         elif args.command == "layout":
             cmd_layout(args)
     except Exception as e:

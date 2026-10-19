@@ -3,25 +3,31 @@
 
 Scans ``$...$`` (inline) / ``$$...$$`` (block) blocks, validates syntax with
 matplotlib mathtext, renders each to a tightly-cropped transparent PNG, and
-replaces the formula with an image reference whose inline style is sized in
-``em`` units so the formula scales with the surrounding text on any device.
+replaces the formula with an image reference carrying a WeChat-safe inline
+style.
 
-The output style is computed from the rendered glyph metrics:
+Why px and not em: WeChat's editor ignores ``em`` units on ``<img>`` and
+forces ``display:block`` on every image, so an em-sized formula would show
+up at the PNG's natural size on its own line, mid-sentence. The renderer
+therefore renders each PNG at a small target size (inline ≈ 11pt → about
+20px tall) and emits an absolute-pixel style that browsers honour (local
+preview, web view); WeChat falls back to the already-small natural size.
 
-- **Inline** ``$E=mc^2$`` → image height in em matches the cap-height of the
-  formula at the rendered fontsize, with a negative ``vertical-align`` so the
-  image baseline aligns with the text baseline (no awkward middle alignment).
-- **Block** ``$$...$$`` → same em-based height (slightly larger so display
-  equations read as such), capped by ``max-height`` for tall fractions/sums
-  and by ``max-width: 88%`` for wide ones, centered with consistent margins.
+- **Inline** ``$E=mc^2$`` → ``height:20px;width:auto;vertical-align:-3px``
+  keeps the formula in the text flow, on the text baseline; ``border:0``
+  cancels WeChat's auto border on images.
+- **Block** ``$$...$$`` → ``display:block;margin:1.2em auto;max-width:96%``
+  centers display equations and caps pathologically wide ones.
+
+The render metrics (``height_em`` / ``ascent_em`` / ``descent_em``) are
+still computed and returned for reporting and validation, but are not
+emitted as CSS (WeChat would ignore them).
 
 The renderer uses the Computer Modern font (``mathtext.fontset='cm'``) for a
 classic LaTeX look, in contrast to the default DejaVu which looks like
 programmer's monospace. The PNG is cropped tightly with a few pixels of
 breathing room, so a small symbol like ``x`` does not get blown up to a
-screen-spanning block (the previous fixed ``height: 1.5em`` did that for tall
-formulas and shrank wide ones; the new sizing preserves aspect ratio and
-respects the body text scale).
+screen-spanning block.
 
 Usage:
     python3 render_formulas.py article.md
